@@ -2,21 +2,25 @@
 
 Priority order set by the owner. See CLAUDE.md for architecture/runbook.
 
+## Done
+
+### ✅ iOS Shortcut (share-to-app) — owner priority #2
+Share a reel from Instagram on the phone → it lands in the queue/library without opening the site.
+- **`netlify/functions/submit.mjs`** — token-gated (`SHORTCUT_TOKEN` bearer) endpoint. Accepts a shared URL (also tolerates a link buried in shared text, raw-text body, or `?url=`/`?token=`), signs in as the app user (`APP_EMAIL`/`APP_PASSWORD`) so RLS scopes the rows, then **saves directly** (no review screen): caption/website → `status:'saved'` recipe; link_in_bio/video → `recipe_jobs` row. Returns a friendly `message` for the Shortcut to display.
+- **Auth mechanism chosen:** a shared bearer token (`SHORTCUT_TOKEN`), set in gitignored `.env` + on the Netlify site. Simpler than per-request Supabase auth and keeps the Shortcut trivial. (No service-role key — keeps the blast radius to what the app user can do via RLS.)
+- **Shortcut recipe:** see `docs/ios-shortcut.md` (Share Sheet → Get Contents of URL POST → Show Notification). Build guide uses a placeholder token since the repo is public.
+- Verified live end-to-end: 401 on bad token, 400 on no URL, caption + website both saved and RLS-scoped (test rows cleaned up). IG caption fetch confirmed working from Netlify for this function too.
+- Possible follow-ups: generate a one-tap importable `.shortcut` file; handle Instagram `/share/…` redirect URLs (resolve before `parseShortcode`).
+
 ## Next up
 
-### 1. iOS Shortcut (share-to-app) — owner priority #2
-Share a reel from Instagram on the phone → it lands in the queue/library without opening the site.
-- Build a small `submit` endpoint (Netlify function) that accepts a shared URL + authenticates the user, then either extracts (caption/web) or enqueues a job (link_in_bio/video) — server-side, so the Shortcut stays simple.
-- Provide the iOS Shortcut recipe (Share Sheet action → "Get Contents of URL" POST → confirmation).
-- Auth from the Shortcut: simplest is a per-user token/secret the Shortcut sends; decide the mechanism.
-
-### 2. Pinterest support — owner priority #3
+### 1. Pinterest support — owner priority #3
 Pins usually link to a source recipe site (→ reuse the website path) or hold the recipe in the pin description/image (→ fetch + Claude, OCR if needed). Add a Pinterest branch to `extract.mjs`.
 
-### 3. Website extraction hardening — owner priority #4
+### 2. Website extraction hardening — owner priority #4
 The web path works (JSON-LD + text → Claude). Harden for sites without JSON-LD, paywalls, consent walls, and odd markup. Add a few real-world test URLs to `scripts/`.
 
-### 4. Polish / design — owner priority #5
+### 3. Polish / design — owner priority #5
 - **Capture thumbnails for caption recipes** (currently `image_url` is null for IG caption extracts → cards show a placeholder). Pull the reel thumbnail (yt-dlp metadata or the embed) on the worker/serverless side.
 - Search + tag filtering in the Library; favorites view.
 - Recipe scaling (2×), shopping-list generation (the structured `ingredients` already support this).

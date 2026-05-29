@@ -33,3 +33,6 @@ tools/
 
 # Local Netlify folder
 .netlify
+
+# Generated iOS Shortcut — contains the SHORTCUT_TOKEN secret, never commit
+*.shortcut

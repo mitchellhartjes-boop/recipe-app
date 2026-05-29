@@ -27,6 +27,8 @@ Personal recipe vault that pulls recipes from **Instagram reels, recipe websites
 
 **Serverless extraction** — `netlify/functions/extract.mjs` handles the FAST paths (caption + website) synchronously and returns a draft for the review screen. Core logic in `netlify/functions/_lib/extract.mjs` (`fetchCaption`, `extractRecipeFromText`, `extractReel`, `extractWebPage`, `recoverFromWeb`).
 
+**Share-to-app** — `netlify/functions/submit.mjs` is the **iOS Shortcut** endpoint: `POST { url }` gated by a `SHORTCUT_TOKEN` bearer header. It reuses the same extractors but **saves directly** (the phone share flow has no review screen): fast paths (caption/website) insert a `status:'saved'` recipe, slow paths (link-in-bio/video) enqueue a `recipe_jobs` row. It signs in as the app user (`APP_EMAIL`/`APP_PASSWORD`) so RLS + the `auth.uid()` column defaults scope the rows — same mechanism as the worker. Build/usage guide: `docs/ios-shortcut.md`.
+
 **Database / realtime** — Supabase project `jftsgeerivttpvqiqjnj` (shared with the owner's other "food/health tracker" app; our tables are `recipe_*`-prefixed). Tables:
 - `recipe_recipes` — the library. jsonb `ingredients`/`steps`, `text[]` tags, RLS scoped to `auth.uid()`, status `draft|saved`.
 - `recipe_jobs` — async queue. `kind` (`link_in_bio`|`video`), `status` (`queued|processing|done|failed`), `meta` jsonb, `recipe_id`. RLS per-user.
@@ -48,8 +50,10 @@ Personal recipe vault that pulls recipes from **Instagram reels, recipe websites
 ```
 src/                      React app (pages/, lib/ {supabase, auth, api, types})
 netlify/functions/
-  extract.mjs             serverless extract endpoint (caption + website)
+  extract.mjs             serverless extract endpoint (caption + website) -> draft for review
+  submit.mjs              iOS Shortcut share-to-app endpoint (token-gated; saves/enqueues directly)
   _lib/extract.mjs        shared extraction core (also used by the worker)
+docs/ios-shortcut.md      how to build + use the iOS share Shortcut
 worker/
   index.mjs               queue-draining worker (cloud + local)
   lib/video.mjs           yt-dlp → ffmpeg → Groq + Claude vision
@@ -74,7 +78,7 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
   npm.cmd run build
   netlify deploy --prod --dir dist --functions netlify/functions --site ff4ffb6a-8b1d-4e70-93d5-ab5590a9b548
   ```
-  (Env vars `ANTHROPIC_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` are already set on the Netlify site.)
+  (Env vars already set on the Netlify site: `ANTHROPIC_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and — for the `submit` endpoint — `SHORTCUT_TOKEN`, `APP_EMAIL`, `APP_PASSWORD`.)
 - **Local video worker:** from `recipe-app/`:
   ```
   $env:WORKER_KINDS='video'; node worker/index.mjs
@@ -88,7 +92,8 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
 
 - `.env` (gitignored): `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `APP_EMAIL`, `APP_PASSWORD` (the worker signs in as this app user).
 - `.env.local` (gitignored): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (publishable = safe in the client).
-- **Netlify site env:** `ANTHROPIC_API_KEY` + the two `VITE_SUPABASE_*`.
+- **Netlify site env:** `ANTHROPIC_API_KEY`, the two `VITE_SUPABASE_*`, plus `SHORTCUT_TOKEN`, `APP_EMAIL`, `APP_PASSWORD` (the last three power the `submit` share-to-app endpoint).
+- `SHORTCUT_TOKEN` (gitignored `.env` + Netlify): the bearer secret the iOS Shortcut sends. The public repo must never contain its value — `docs/ios-shortcut.md` uses a placeholder.
 - **GitHub Actions secrets:** all six of the above.
 - **Supabase:** project `jftsgeerivttpvqiqjnj`, URL `https://jftsgeerivttpvqiqjnj.supabase.co`. (MCP connected in past sessions.)
 - ⚠️ **Rotate-me:** the Anthropic key, Groq key, app password, and the GitHub PAT all passed through chat during setup — rotate them when convenient.
@@ -107,4 +112,4 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
 
 ## Backlog
 
-See **BACKLOG.md**. Current priority order: 1) ✅ async worker (done), 2) **iOS Shortcut (next)**, 3) Pinterest, 4) website hardening, 5) polish/design. Plus the standing infra upgrade: **real-time video without the user's PC** (residential proxy / cookies / always-on home device).
+See **BACKLOG.md**. Current priority order: 1) ✅ async worker (done), 2) ✅ iOS Shortcut (done — `submit.mjs` + `docs/ios-shortcut.md`), 3) **Pinterest (next)**, 4) website hardening, 5) polish/design. Plus the standing infra upgrade: **real-time video without the user's PC** (residential proxy / cookies / always-on home device).
