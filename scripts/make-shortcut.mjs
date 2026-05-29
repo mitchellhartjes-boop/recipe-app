@@ -7,9 +7,11 @@
 //
 // Run: node scripts/make-shortcut.mjs   ->   writes "Save to Recipe Vault.shortcut" in the repo root.
 //
-// NOTE: this is an UNSIGNED shortcut (plist). iOS imports it only with
-// Settings -> Shortcuts -> "Allow Untrusted Shortcuts" enabled (that toggle appears after you've
-// run at least one shortcut). If the import is ever rejected, build it by hand from
+// NOTE: this emits an UNSIGNED shortcut (plist). CURRENT iOS DOES NOT SUPPORT importing unsigned
+// shortcut files ("Importing unsigned shortcut files is not supported") and there is no toggle to
+// re-enable it. To make this importable you must SIGN it with the macOS Shortcuts CLI:
+//   shortcuts sign -m anyone -i "Save to Recipe Vault.shortcut" -o "Save to Recipe Vault.signed.shortcut"
+// which requires a Mac. On a Windows-only setup, build the shortcut by hand from
 // docs/ios-shortcut.md — that path always works.
 import dotenv from 'dotenv'
 import fs from 'node:fs'

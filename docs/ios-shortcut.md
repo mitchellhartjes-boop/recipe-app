@@ -36,9 +36,14 @@ for the worker (link-in-bio reels, video reels), then shows you a notification.
 6. Add action **Show Notification** → set its text to the **Dictionary Value** from step 5.
 7. Tap **Done**.
 
-That’s it. (Prefer a one-tap importable `.shortcut` file instead of building by hand? Ask — it’s
-generatable, but unsigned shortcuts require enabling *Settings → Shortcuts → Allow Untrusted
-Shortcuts*, so the manual build above is the simplest reliable path.)
+That’s it — this hand-built path is the reliable one.
+
+> **Why not a ready-made `.shortcut` file?** Current iOS refuses to import unsigned shortcut files
+> (“Importing unsigned shortcut files is not supported”) and there’s no setting to re-enable it.
+> Making one importable requires **signing** it with the macOS Shortcuts CLI
+> (`shortcuts sign -m anyone -i in.shortcut -o out.shortcut`), which needs a Mac. On a Windows-only
+> setup, build it by hand as above. (`scripts/make-shortcut.mjs` can still emit the unsigned plist
+> if you ever have a Mac to sign it on.)
 
 ## Use it
 
