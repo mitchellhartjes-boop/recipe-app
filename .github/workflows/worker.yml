@@ -1,0 +1,40 @@
+name: recipe-worker
+
+# Drains the Supabase recipe_jobs queue (video + link-in-bio) on GitHub's runners.
+# Public repo => unlimited free Actions minutes. ffmpeg is preinstalled on ubuntu-latest.
+on:
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes (GitHub's minimum)
+  workflow_dispatch: {} # manual / on-demand run
+
+concurrency:
+  group: recipe-worker # never run two drains at once
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --omit=dev
+      - name: Install yt-dlp
+        run: |
+          sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp
+          sudo chmod +x /usr/local/bin/yt-dlp
+      - name: Drain the queue
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          APP_EMAIL: ${{ secrets.APP_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          WORKER_RUN_ONCE: '1'
+          YTDLP_PATH: yt-dlp
+          FFMPEG_PATH: ffmpeg
+        run: node worker/index.mjs
