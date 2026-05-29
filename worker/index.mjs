@@ -26,6 +26,10 @@ const YTDLP = process.env.YTDLP_PATH || path.join(TOOLS, win ? 'yt-dlp.exe' : 'y
 const FFMPEG = process.env.FFMPEG_PATH || path.join(TOOLS, win ? 'ffmpeg.exe' : 'ffmpeg')
 const POLL_MS = 5000
 const RUN_ONCE = process.env.WORKER_RUN_ONCE === '1' // drain the queue, then exit (testing / cron)
+// Restrict which job kinds this worker handles (empty = all). Cloud handles
+// link_in_bio (always-on); video must run on a residential IP (local), since
+// Instagram blocks video downloads from datacenter IPs.
+const KINDS = (process.env.WORKER_KINDS || '').split(',').map((s) => s.trim()).filter(Boolean)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -107,12 +111,9 @@ async function main() {
 
   for (;;) {
     try {
-      const { data: jobs, error } = await supabase
-        .from('recipe_jobs')
-        .select('*')
-        .eq('status', 'queued')
-        .order('created_at', { ascending: true })
-        .limit(1)
+      let query = supabase.from('recipe_jobs').select('*').eq('status', 'queued')
+      if (KINDS.length) query = query.in('kind', KINDS)
+      const { data: jobs, error } = await query.order('created_at', { ascending: true }).limit(1)
       if (error) throw error
       const job = jobs?.[0]
       if (!job) {

@@ -35,6 +35,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           WORKER_RUN_ONCE: '1'
+          WORKER_KINDS: link_in_bio # cloud handles link-in-bio only; video runs on the local (residential-IP) worker
           YTDLP_PATH: yt-dlp
           FFMPEG_PATH: ffmpeg
         run: node worker/index.mjs
