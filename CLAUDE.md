@@ -8,7 +8,13 @@ Personal recipe vault that pulls recipes from **Instagram reels, recipe websites
 
 ---
 
-## Status (2026-05-29): MVP live — all four ingestion paths working
+## Status (2026-05-30): functionally complete — next phase is **design/polish**
+
+All ingestion paths work end-to-end (verified by the owner), plus permanent cover images, on-demand
+cloud processing, and the iOS share Shortcut. The backend is in good shape. **The active focus is now
+design/UX — see [`docs/DESIGN.md`](docs/DESIGN.md)** for the design brief (palette, current screens,
+goals, and how to run the frontend for iteration). Pure design work is frontend-only (`src/**`,
+`tailwind.config.js`) and shouldn't need backend changes.
 
 | Input | How it's extracted | Where it runs | Latency / availability |
 |---|---|---|---|
@@ -23,7 +29,7 @@ Personal recipe vault that pulls recipes from **Instagram reels, recipe websites
 
 ## Architecture
 
-**Frontend** — React 19 + Vite 8 + TypeScript + Tailwind 3 + react-router 7 + `vite-plugin-pwa`. Deployed to **Netlify**. Auth = Supabase email+password (email confirmation is OFF). Pages: Library (with live job cards), AddRecipe, ReviewRecipe (edit + save), RecipeDetail.
+**Frontend** — React 19 + Vite 8 + TypeScript + Tailwind 3 + react-router 7 + `vite-plugin-pwa`. Deployed to **Netlify**. Auth = Supabase email+password (email confirmation is OFF). Pages: Library (with live job cards), AddRecipe, ReviewRecipe (edit + save), RecipeDetail, Login; shell in `components/Layout.tsx`. Design system (cream/paper/ink + `paprika` accent, Fraunces + Inter) lives in `tailwind.config.js`. **For design work, start from `docs/DESIGN.md`.** Run the frontend alone with `npm.cmd run dev` (localhost:5173, talks to live Supabase — no functions/worker needed).
 
 **Serverless extraction** — `netlify/functions/extract.mjs` handles the FAST paths (caption + website) synchronously and returns a draft for the review screen. Core logic in `netlify/functions/_lib/extract.mjs` (`fetchCaption`, `extractRecipeFromText`, `extractReel`, `extractWebPage`). **Link-in-bio routing (2026-05-30):** Claude tags `where_is_recipe` (caption|external_link|video). `external_link` reels now resolve via the **website path** — if the blog URL is in the caption it's fetched inline (instant, ~0.5¢); otherwise the user is told to open the link and share the page. The old `recoverFromWeb` (Claude `web_search`, ~30¢, slow, timed out) is **retired** — still in the lib + worker as a defensive capability but nothing enqueues `link_in_bio` jobs anymore.
 
@@ -57,6 +63,7 @@ netlify/functions/
   _lib/extract.mjs        shared extraction core (also used by the worker)
   _lib/images.mjs         download + re-host cover images to Supabase Storage (permanent URLs)
   _lib/apify.mjs          Apify Instagram Scraper client (reel video URL + caption for the video path)
+docs/DESIGN.md            design brief — START HERE for design/polish work
 docs/ios-shortcut.md      how to build + use the iOS share Shortcut
 worker/
   index.mjs               queue-draining worker (cloud handles link_in_bio + video)
@@ -112,4 +119,4 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
 
 ## Backlog
 
-See **BACKLOG.md**. Current priority order: 1) ✅ async worker, 2) ✅ iOS Shortcut, 3) ✅ recipe images, 4) ✅ always-on video via Apify (no PC), 5) **Pinterest (next)**, 6) website hardening, 7) polish/design. The old "real-time video without the user's PC" infra item is now solved for public reels (Apify); only **audience-restricted reels** remain unreadable (would need the owner's own login).
+See **BACKLOG.md**. Ingestion/infra work is done: ✅ async worker, ✅ iOS Shortcut, ✅ recipe images (clean, play-button-free), ✅ always-on video via Apify (no PC), ✅ on-demand dispatch, ✅ link-in-bio + Pinterest handled via the website path. **Active focus: design/polish → `docs/DESIGN.md`.** Remaining engineering nice-to-haves: website-extractor hardening (now the primary path for link-in-bio/Pinterest); audience-restricted reels stay unreadable (would need the owner's own login — not pursued).
