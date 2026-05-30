@@ -54,23 +54,21 @@ function extractOgImage(html) {
   return m ? decodeEntities(m[1]) : null
 }
 
-// The IG captioned-embed has no og:image. The reel cover is the largest cdninstagram <img>
-// (avatars are tiny ~150px; the crawler card on lookaside.* is skipped by the host filter).
-// Returns the best cover URL or null. Note: these CDN URLs expire — re-host them (see images.mjs).
-function extractReelImage(html) {
-  const area = (s) => {
-    const a = s.match(/c0\.\d+\.(\d{2,4})\.(\d{2,4})a/) // square-crop hint, e.g. c0.280.720.720a
-    if (a) return +a[1] * +a[2]
-    const b = s.match(/(\d{2,4})x(\d{2,4})/) // explicit WxH, e.g. 150x150
-    if (b) return +b[1] * +b[2]
-    return 1 // unknown size — keep as a low-priority candidate
+// The reliable reel cover. The captioned-embed's own <img> tags are the author avatar + SUGGESTED
+// posts from the creator — so picking the "largest" once grabbed a random other reel's thumbnail.
+// The actual cover is the og:image of the lookaside "crawler" page, which is keyed by THIS reel's
+// media_id. Fetch that page and read its og:image. One extra lightweight request; never throws.
+// (CDN URLs expire — re-host the result, see images.mjs.)
+async function fetchReelCover(html) {
+  try {
+    const m = html.match(/https:\/\/lookaside\.instagram\.com\/seo\/google_widget\/crawler\/\?media_id=\d+/i)
+    if (!m) return null
+    const res = await fetch(m[0], { headers: { 'User-Agent': CRAWLER_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
+    if (!res.ok) return null
+    return extractOgImage(await res.text())
+  } catch {
+    return null
   }
-  const candidates = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
-    .map((m) => decodeEntities(m[1]))
-    .filter((s) => /cdninstagram\.com|fbcdn\.net/i.test(s))
-    .map((s) => ({ s, score: area(s) }))
-    .sort((x, y) => y.score - x.score)
-  return candidates.length ? candidates[0].s : null
 }
 
 // Pull any schema.org JSON-LD blocks (recipe sites embed the recipe card here).
@@ -92,7 +90,7 @@ export async function fetchCaption(url) {
   if (!res.ok) throw new Error(`Instagram embed fetch failed (HTTP ${res.status})`)
   const html = await res.text()
   const text = htmlToText(html).slice(0, 8000)
-  const imageUrl = extractReelImage(html) || extractOgImage(html)
+  const imageUrl = (await fetchReelCover(html)) || extractOgImage(html)
   const looksWalled = /log in|sign up to see/i.test(text) && text.length < 400
   // For private / audience-restricted / removed reels, Instagram serves anonymous requests a
   // "broken or removed" stub (or a login wall) instead of the caption. Detect that so callers can
