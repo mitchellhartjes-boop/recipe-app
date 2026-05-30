@@ -68,9 +68,15 @@ async function processJob(supabase, job) {
     let stored = null
     try {
       if (recipeId && APIFY) {
+        const { data: cur } = await supabase.from('recipe_recipes').select('image_url').eq('id', recipeId).single()
         const { imageUrl } = await fetchReelViaApify(job.url, APIFY)
         stored = imageUrl ? await rehostImage(supabase, imageUrl, 'reel') : null
-        if (stored) await supabase.from('recipe_recipes').update({ image_url: stored }).eq('id', recipeId)
+        if (stored) {
+          await supabase.from('recipe_recipes').update({ image_url: stored }).eq('id', recipeId)
+          // Drop the previous image (e.g. a play-button lookaside cover) we just replaced.
+          const oldKey = cur?.image_url?.split('/recipe-images/')[1]
+          if (oldKey && !stored.endsWith(oldKey)) await supabase.storage.from('recipe-images').remove([oldKey])
+        }
       }
     } catch (e) {
       console.warn(`[job ${job.id}] cover fetch failed: ${e.message}`)

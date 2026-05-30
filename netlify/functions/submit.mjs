@@ -154,16 +154,14 @@ export default async (req) => {
       const res = await extractReel(link, { apiKey })
       const r = res.recipe
       if (r.found) {
-        const cover = await rehostImage(supabase, res.imageUrl, r.title || 'reel')
-        const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: cover || res.imageUrl, model: res.model })
+        // Skip the embed's lookaside cover — it carries Instagram's play-button overlay. Save
+        // without an image, then a 'cover' job pulls Apify's clean, higher-res cover and fills it
+        // in live (~1-2 min via the on-demand worker).
+        const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: null, model: res.model })
         const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
         if (error) throw error
-        // Some IG embed variants expose no cover. Queue a background 'cover' job — the dispatch
-        // trigger runs the worker, which pulls a reliable cover from Apify and fills it in live.
-        if (!record.image_url) {
-          await supabase.from('recipe_jobs').insert({ url: link, kind: 'cover', meta: { recipe_id: data.id } })
-        }
-        return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+        await supabase.from('recipe_jobs').insert({ url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: null, message: `Saved “${record.title}” to your library.` })
       }
       // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
       // job that will only fail later on the worker — tell the user right away.
