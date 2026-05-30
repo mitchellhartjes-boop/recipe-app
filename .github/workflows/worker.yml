@@ -1,7 +1,7 @@
 name: recipe-worker
 
 # Drains the Supabase recipe_jobs queue (video + link-in-bio) on GitHub's runners.
-# Public repo => unlimited free Actions minutes. ffmpeg is preinstalled on ubuntu-latest.
+# Public repo => unlimited free Actions minutes. ffmpeg is apt-installed below (NOT preinstalled).
 on:
   schedule:
     - cron: '*/5 * * * *' # every 5 minutes (GitHub's minimum)
@@ -22,6 +22,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm ci --omit=dev
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Drain the queue
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -33,5 +35,5 @@ jobs:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           WORKER_RUN_ONCE: '1'
           WORKER_KINDS: link_in_bio,video # cloud now handles BOTH: video via Apify's direct URL (no yt-dlp / no IG datacenter block)
-          FFMPEG_PATH: ffmpeg # preinstalled on ubuntu-latest
+          FFMPEG_PATH: ffmpeg # from the apt-get install step above
         run: node worker/index.mjs
