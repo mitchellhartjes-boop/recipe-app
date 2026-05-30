@@ -119,9 +119,16 @@ Respond with ONLY a JSON object (no prose, no markdown code fences) matching exa
   "steps": [ string ],            // ordered instruction steps, cleaned of emoji clutter
   "tags": [ string ],             // lowercase, e.g. ["dinner","pasta","cajun"]
   "external_url": string|null,    // a recipe/blog URL if one appears in the text (e.g. "recipe on my blog: ...")
+  "where_is_recipe": "caption"|"external_link"|"video"|"unknown",  // see below — drives how we fetch it
   "notes_for_user": string|null   // when found=false, a short reason, e.g. "Recipe is demonstrated in the video, not written in the caption" or "Recipe is linked in the creator's bio"
 }
-Parse quantities into raw + structured parts where you can ("2 cups flour" -> quantity "2", unit "cup", item "flour"); always keep the original line in "raw". If there is no real recipe, set found=false, fill notes_for_user, and still capture title/source_author/external_url if visible.`
+Parse quantities into raw + structured parts where you can ("2 cups flour" -> quantity "2", unit "cup", item "flour"); always keep the original line in "raw". If there is no real recipe, set found=false, fill notes_for_user, and still capture title/source_author/external_url if visible.
+
+Set "where_is_recipe" to where the actual recipe lives:
+- "caption": the full recipe (ingredients/steps) is written here in the text (this is the found=true case).
+- "external_link": the text points to the recipe on a website/blog or says "link in bio / recipe on my blog / full recipe at ..." — i.e. it lives on another page. Capture external_url if a URL is visible.
+- "video": there is NO recipe and NO external recipe link — the caption only names/teases the dish (e.g. "save this!", dish name + emojis) and the recipe is demonstrated or spoken in the VIDEO itself.
+- "unknown": you genuinely can't tell. When unsure between "video" and "external_link", prefer "video" unless the caption clearly references a blog/website/bio link.`
 
 function stripFences(s) {
   return s

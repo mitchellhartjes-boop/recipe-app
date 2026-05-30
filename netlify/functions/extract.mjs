@@ -82,9 +82,8 @@ export default async (req) => {
           draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
         })
       }
-      // No recipe in the caption. If there's a dish/link, it's a link-in-bio case (slow,
-      // async recovery — handled separately). Otherwise it's likely video-only.
-      const reason = r.title || r.external_url ? 'link_in_bio' : 'video_only'
+      // Route by where Claude says the recipe lives (blog/bio link vs the video itself).
+      const reason = r.where_is_recipe === 'external_link' || r.external_url ? 'link_in_bio' : 'video_only'
       return json({
         ok: false,
         reason,

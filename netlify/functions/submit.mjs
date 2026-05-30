@@ -171,8 +171,9 @@ export default async (req) => {
             "Couldn't read this reel — it looks private or audience-restricted, so Instagram only shows it to logged-in viewers. The app can't read it automatically.",
         })
       }
-      // No recipe in the caption: link-in-bio (recover from the blog) or video-only — both async.
-      const kind = r.title || r.external_url ? 'link_in_bio' : 'video'
+      // Route by where Claude says the recipe lives: a blog/bio link -> link_in_bio recovery;
+      // otherwise it's demonstrated in the video itself -> video (Apify) path.
+      const kind = r.where_is_recipe === 'external_link' || r.external_url ? 'link_in_bio' : 'video'
       const meta =
         kind === 'link_in_bio'
           ? { title: r.title ?? null, author: r.source_author ?? null, externalUrl: r.external_url ?? null }
