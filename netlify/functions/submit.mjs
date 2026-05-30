@@ -160,6 +160,17 @@ export default async (req) => {
         if (error) throw error
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
       }
+      // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
+      // job that will only fail later on the worker — tell the user right away.
+      if (res.inaccessible) {
+        return json({
+          ok: false,
+          status: 'inaccessible',
+          kind: 'instagram',
+          message:
+            "Couldn't read this reel — it looks private or audience-restricted, so Instagram only shows it to logged-in viewers. The app can't read it automatically.",
+        })
+      }
       // No recipe in the caption: link-in-bio (recover from the blog) or video-only — both async.
       const kind = r.title || r.external_url ? 'link_in_bio' : 'video'
       const meta =

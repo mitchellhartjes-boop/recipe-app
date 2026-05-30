@@ -72,6 +72,16 @@ export default async (req) => {
           recipe: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'caption', model: res.model, imageUrl: cover || res.imageUrl }),
         })
       }
+      // Couldn't read the reel at all (private / audience-restricted / removed).
+      if (res.inaccessible) {
+        return json({
+          ok: false,
+          reason: 'inaccessible',
+          message:
+            "Instagram wouldn't show this reel without logging in (it looks private or audience-restricted), so it can't be read automatically.",
+          draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
+        })
+      }
       // No recipe in the caption. If there's a dish/link, it's a link-in-bio case (slow,
       // async recovery — handled separately). Otherwise it's likely video-only.
       const reason = r.title || r.external_url ? 'link_in_bio' : 'video_only'

@@ -94,7 +94,13 @@ export async function fetchCaption(url) {
   const text = htmlToText(html).slice(0, 8000)
   const imageUrl = extractReelImage(html) || extractOgImage(html)
   const looksWalled = /log in|sign up to see/i.test(text) && text.length < 400
-  return { shortcode, embedUrl, text, imageUrl, looksWalled }
+  // For private / audience-restricted / removed reels, Instagram serves anonymous requests a
+  // "broken or removed" stub (or a login wall) instead of the caption. Detect that so callers can
+  // tell the user it's restricted rather than misrouting it to a video/link-in-bio job that fails.
+  const WALL =
+    /(this (?:photo|video) may be broken|post may have been removed|content isn'?t available|isn'?t available to everyone|page isn'?t available|log in to see|sign up to see this)/i
+  const inaccessible = text.length < 40 || (WALL.test(text) && text.length < 700)
+  return { shortcode, embedUrl, text, imageUrl, looksWalled, inaccessible }
 }
 
 const SYSTEM_PROMPT = `You extract structured recipes from web/social text (Instagram captions, recipe blog pages, etc.). The text may include site chrome ("Log in", "Sign up", nav, ads, JSON-LD) — use whatever is useful and ignore the rest.
@@ -144,8 +150,8 @@ export async function extractRecipeFromText({ text, sourceUrl, apiKey }) {
 }
 
 export async function extractReel(url, { apiKey } = {}) {
-  const { embedUrl, text, imageUrl, looksWalled, shortcode } = await fetchCaption(url)
-  if (looksWalled || text.length < 30) {
+  const { embedUrl, text, imageUrl, looksWalled, inaccessible, shortcode } = await fetchCaption(url)
+  if (inaccessible || looksWalled) {
     return {
       source_platform: 'instagram',
       source_url: url,
@@ -153,7 +159,8 @@ export async function extractReel(url, { apiKey } = {}) {
       embedUrl,
       imageUrl,
       captionChars: text.length,
-      recipe: { found: false, notes_for_user: 'Could not read the caption (Instagram returned a login wall).' },
+      inaccessible: true,
+      recipe: { found: false, notes_for_user: 'Instagram would not show this reel without logging in — it looks private or audience-restricted.' },
     }
   }
   const { recipe, model, usage } = await extractRecipeFromText({ text, sourceUrl: url, apiKey })
@@ -212,7 +219,9 @@ When done, reply with ONLY a JSON object (no prose, no markdown fences):
 If you cannot confidently find the creator's own recipe, set found=false with a short note. Do not fabricate quantities.`
 
 export async function recoverFromWeb({ title, author, sourceUrl, externalUrl, apiKey }) {
-  const client = new Anthropic({ apiKey })
+  // web_search turns can take minutes; the SDK's default request timeout can trip with
+  // "Request timed out". Give it generous room and a couple of retries.
+  const client = new Anthropic({ apiKey, timeout: 15 * 60 * 1000, maxRetries: 2 })
   const hint = externalUrl ? `\n- Link found in the caption (likely the recipe): ${externalUrl}` : ''
   const messages = [
     {

@@ -23,7 +23,7 @@ export type ExtractResult =
   | { ok: true; source_kind: string; recipe: DraftRecipe }
   | {
       ok: false
-      reason: 'link_in_bio' | 'video_only' | 'no_recipe'
+      reason: 'link_in_bio' | 'video_only' | 'no_recipe' | 'inaccessible'
       message: string
       draft: DraftRecipe
       recover?: { title: string | null; author: string | null; externalUrl: string | null } | null
