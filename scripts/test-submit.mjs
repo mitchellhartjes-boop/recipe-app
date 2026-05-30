@@ -30,6 +30,12 @@ async function show(label, res) {
 
 const insertedRecipes = []
 const insertedJobs = []
+const insertedImages = []
+const track = (body) => {
+  if (body.recipe_id) insertedRecipes.push(body.recipe_id)
+  if (body.job_id) insertedJobs.push(body.job_id)
+  if (body.image_url) insertedImages.push(body.image_url)
+}
 
 // 1) auth: no token -> 401
 await show('no token (expect 401)', await call({ url: 'https://example.com', token: null }))
@@ -37,20 +43,19 @@ await show('no token (expect 401)', await call({ url: 'https://example.com', tok
 await show('wrong token (expect 401)', await call({ url: 'https://example.com', token: 'nope' }))
 // 3) no URL -> 400
 await show('no url (expect 400)', await call({ body: JSON.stringify({}) }))
-// 4) website (fast path -> saved). Also proves "URL buried in text" parsing.
-{
-  const body = await show('website (expect saved)', await call({ body: JSON.stringify({ url: 'Found this: https://www.erinliveswhole.com/chicken-enchilada-skillet/ yum' }) }))
-  if (body.recipe_id) insertedRecipes.push(body.recipe_id)
-}
-// 5) Instagram caption (fast path -> saved)
-{
-  const body = await show('caption reel (expect saved)', await call({ url: 'https://www.instagram.com/reel/DW0Yd7ODXKx/' }))
-  if (body.recipe_id) insertedRecipes.push(body.recipe_id)
-  if (body.job_id) insertedJobs.push(body.job_id)
+// 4) website (fast path -> saved). Also proves "URL buried in text" parsing + image re-hosting.
+track(await show('website (expect saved + image_url)', await call({ body: JSON.stringify({ url: 'Found this: https://www.erinliveswhole.com/chicken-enchilada-skillet/ yum' }) })))
+// 5) Instagram caption (fast path -> saved). Proves reel-cover capture + re-hosting.
+track(await show('caption reel (expect saved + image_url)', await call({ url: 'https://www.instagram.com/reel/DW0Yd7ODXKx/' })))
+
+// Verify the re-hosted images actually load.
+for (const u of insertedImages) {
+  const head = await fetch(u, { method: 'HEAD' })
+  console.log(`image ${head.ok ? 'OK' : 'FAIL ' + head.status}: ${u}`)
 }
 
-// --- cleanup: delete the rows this test created ---
-if (insertedRecipes.length || insertedJobs.length) {
+// --- cleanup: delete the rows + storage objects this test created ---
+if (insertedRecipes.length || insertedJobs.length || insertedImages.length) {
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL,
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -59,5 +64,7 @@ if (insertedRecipes.length || insertedJobs.length) {
   await supabase.auth.signInWithPassword({ email: process.env.APP_EMAIL, password: process.env.APP_PASSWORD })
   if (insertedRecipes.length) await supabase.from('recipe_recipes').delete().in('id', insertedRecipes)
   if (insertedJobs.length) await supabase.from('recipe_jobs').delete().in('id', insertedJobs)
-  console.log(`\nCleaned up ${insertedRecipes.length} recipe(s), ${insertedJobs.length} job(s).`)
+  const keys = insertedImages.map((u) => u.split('/recipe-images/')[1]).filter(Boolean)
+  if (keys.length) await supabase.storage.from('recipe-images').remove(keys)
+  console.log(`\nCleaned up ${insertedRecipes.length} recipe(s), ${insertedJobs.length} job(s), ${keys.length} image(s).`)
 }

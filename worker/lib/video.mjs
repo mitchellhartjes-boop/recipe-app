@@ -28,6 +28,20 @@ Respond with ONLY a JSON object (no prose, no markdown fences):
 }
 found=true only if you can assemble a usable recipe. Do NOT invent specific quantities that aren't stated or clearly shown — leave them null and mention it in notes.`
 
+// The creator-chosen reel cover (a real frame). More reliable than the IG embed for video reels,
+// whose embed often serves no static cover image. URL expires -> re-host it. Never throws.
+export async function getThumbnailUrl(ytdlp, url) {
+  try {
+    const { stdout } = await execFileP(ytdlp, ['--no-warnings', '--skip-download', '--print', '%(thumbnail)s', url], {
+      maxBuffer: 4 * 1024 * 1024,
+    })
+    const u = (stdout || '').trim().split('\n')[0].trim()
+    return /^https?:\/\//i.test(u) ? u : null
+  } catch {
+    return null
+  }
+}
+
 async function transcribe(audioPath, groqKey, model) {
   const buf = await readFile(audioPath)
   const form = new FormData()

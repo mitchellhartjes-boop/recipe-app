@@ -3,6 +3,7 @@
 // Slow paths (link-in-bio web_search, video) are handled async elsewhere — this returns a
 // reason so the client can route them.
 import { extractReel, extractWebPage } from './_lib/extract.mjs'
+import { rehostImage, appClient } from './_lib/images.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,10 +65,11 @@ export default async (req) => {
       const res = await extractReel(url, { apiKey })
       const r = res.recipe
       if (r.found) {
+        const cover = await rehostImage(await appClient(), res.imageUrl, r.title || 'reel')
         return json({
           ok: true,
           source_kind: 'caption',
-          recipe: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'caption', model: res.model, imageUrl: res.imageUrl }),
+          recipe: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'caption', model: res.model, imageUrl: cover || res.imageUrl }),
         })
       }
       // No recipe in the caption. If there's a dish/link, it's a link-in-bio case (slow,
@@ -89,10 +91,11 @@ export default async (req) => {
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.)
     const res = await extractWebPage({ url, apiKey })
     if (res.recipe.found) {
+      const cover = await rehostImage(await appClient(), res.imageUrl, res.recipe.title || 'recipe')
       return json({
         ok: true,
         source_kind: 'web',
-        recipe: toDraft({ recipe: res.recipe, sourceUrl: url, sourcePlatform: 'web', sourceKind: 'web', model: res.model, imageUrl: res.imageUrl }),
+        recipe: toDraft({ recipe: res.recipe, sourceUrl: url, sourcePlatform: 'web', sourceKind: 'web', model: res.model, imageUrl: cover || res.imageUrl }),
       })
     }
     return json({

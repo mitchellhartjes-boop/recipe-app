@@ -54,6 +54,25 @@ function extractOgImage(html) {
   return m ? decodeEntities(m[1]) : null
 }
 
+// The IG captioned-embed has no og:image. The reel cover is the largest cdninstagram <img>
+// (avatars are tiny ~150px; the crawler card on lookaside.* is skipped by the host filter).
+// Returns the best cover URL or null. Note: these CDN URLs expire — re-host them (see images.mjs).
+function extractReelImage(html) {
+  const area = (s) => {
+    const a = s.match(/c0\.\d+\.(\d{2,4})\.(\d{2,4})a/) // square-crop hint, e.g. c0.280.720.720a
+    if (a) return +a[1] * +a[2]
+    const b = s.match(/(\d{2,4})x(\d{2,4})/) // explicit WxH, e.g. 150x150
+    if (b) return +b[1] * +b[2]
+    return 1 // unknown size — keep as a low-priority candidate
+  }
+  const candidates = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+    .map((m) => decodeEntities(m[1]))
+    .filter((s) => /cdninstagram\.com|fbcdn\.net/i.test(s))
+    .map((s) => ({ s, score: area(s) }))
+    .sort((x, y) => y.score - x.score)
+  return candidates.length ? candidates[0].s : null
+}
+
 // Pull any schema.org JSON-LD blocks (recipe sites embed the recipe card here).
 function extractJsonLd(html) {
   const blocks = []
@@ -73,7 +92,7 @@ export async function fetchCaption(url) {
   if (!res.ok) throw new Error(`Instagram embed fetch failed (HTTP ${res.status})`)
   const html = await res.text()
   const text = htmlToText(html).slice(0, 8000)
-  const imageUrl = extractOgImage(html)
+  const imageUrl = extractReelImage(html) || extractOgImage(html)
   const looksWalled = /log in|sign up to see/i.test(text) && text.length < 400
   return { shortcode, embedUrl, text, imageUrl, looksWalled }
 }
@@ -152,6 +171,19 @@ export async function extractWebPage({ url, apiKey }) {
   const text = (jsonLd ? `Structured data (JSON-LD):\n${jsonLd}\n\n` : '') + `Page text:\n${visible}`
   const { recipe, model, usage } = await extractRecipeFromText({ text, sourceUrl: url, apiKey })
   return { source_platform: 'web', source_url: url, imageUrl, model, usage, recipe }
+}
+
+// Lightweight cover-image fetch for a generic page (og:image only, no Claude). Used by the
+// worker to give link-in-bio recipes a thumbnail from the recovered blog page. Never throws.
+export async function fetchPageOgImage(url) {
+  try {
+    if (!url || !/^https?:\/\//i.test(url)) return null
+    const res = await fetch(url, { headers: { 'User-Agent': WEB_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
+    if (!res.ok) return null
+    return extractOgImage(await res.text())
+  } catch {
+    return null
+  }
 }
 
 // ---- Link-in-bio recovery (slow: uses Claude's web_search; run async/worker) ----

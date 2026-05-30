@@ -15,6 +15,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { extractReel, extractWebPage } from './_lib/extract.mjs'
+import { rehostImage } from './_lib/images.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -153,10 +154,11 @@ export default async (req) => {
       const res = await extractReel(link, { apiKey })
       const r = res.recipe
       if (r.found) {
-        const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: res.imageUrl, model: res.model })
+        const cover = await rehostImage(supabase, res.imageUrl, r.title || 'reel')
+        const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: cover || res.imageUrl, model: res.model })
         const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
         if (error) throw error
-        return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, message: `Saved “${record.title}” to your library.` })
+        return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
       }
       // No recipe in the caption: link-in-bio (recover from the blog) or video-only — both async.
       const kind = r.title || r.external_url ? 'link_in_bio' : 'video'
@@ -176,10 +178,11 @@ export default async (req) => {
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.) — fast path, save directly.
     const res = await extractWebPage({ url: link, apiKey })
     if (res.recipe.found) {
-      const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: res.imageUrl, model: res.model })
+      const cover = await rehostImage(supabase, res.imageUrl, res.recipe.title || 'recipe')
+      const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover || res.imageUrl, model: res.model })
       const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
       if (error) throw error
-      return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, message: `Saved “${record.title}” to your library.` })
+      return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }
     return json({ ok: false, status: 'no_recipe', message: 'Couldn’t find a recipe at that link.' })
   } catch (e) {

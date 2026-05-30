@@ -8,8 +8,9 @@
 import dotenv from 'dotenv'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
-import { recoverFromWeb } from '../netlify/functions/_lib/extract.mjs'
-import { extractVideo } from './lib/video.mjs'
+import { recoverFromWeb, fetchCaption, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
+import { rehostImage } from '../netlify/functions/_lib/images.mjs'
+import { extractVideo, getThumbnailUrl } from './lib/video.mjs'
 
 dotenv.config({ path: ['.env', '.env.local'], quiet: true })
 
@@ -83,6 +84,18 @@ async function processJob(supabase, job) {
     recipe = toRecord(r, { url: job.url, sourcePlatform: 'instagram', sourceKind: 'link-in-bio' })
   } else {
     throw new Error(`Unknown job kind: ${job.kind}`)
+  }
+
+  // Best-effort permanent cover image (video: the reel's embed cover; link-in-bio: the blog's
+  // og:image). Re-hosted to Supabase Storage so it never expires. Never blocks the recipe save.
+  try {
+    let cover = null
+    if (job.kind === 'video') cover = (await getThumbnailUrl(YTDLP, job.url)) || (await fetchCaption(job.url)).imageUrl
+    else if (job.kind === 'link_in_bio') cover = await fetchPageOgImage(recipe.source_url)
+    const stored = cover ? await rehostImage(supabase, cover, recipe.title) : null
+    if (stored) recipe.image_url = stored
+  } catch (e) {
+    console.warn(`[job ${job.id}] image capture skipped: ${e.message}`)
   }
 
   const { data, error } = await supabase.from('recipe_recipes').insert(recipe).select('id').single()

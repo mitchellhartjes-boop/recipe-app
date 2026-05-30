@@ -33,6 +33,7 @@ Personal recipe vault that pulls recipes from **Instagram reels, recipe websites
 - `recipe_recipes` — the library. jsonb `ingredients`/`steps`, `text[]` tags, RLS scoped to `auth.uid()`, status `draft|saved`.
 - `recipe_jobs` — async queue. `kind` (`link_in_bio`|`video`), `status` (`queued|processing|done|failed`), `meta` jsonb, `recipe_id`. RLS per-user.
 - Realtime is enabled on both tables (the Library subscribes for live updates).
+- **Storage** bucket `recipe-images` (public read; authenticated insert/update/delete). Recipe cover images are downloaded and **re-hosted** here so they never expire — Instagram reel-cover CDN URLs carry an expiry signature, and source og:images can move. Core: `netlify/functions/_lib/images.mjs` (`rehostImage`). Sources by path: IG caption/reel cover from the embed HTML (`extractReelImage`), website + link-in-bio from `og:image`, video reel from the yt-dlp thumbnail. Backfill existing rows with `scripts/backfill-images.mjs`.
 
 **Async worker** — `worker/index.mjs` (+ `worker/lib/video.mjs`). Signs in as the user, polls `recipe_jobs`, processes, writes the recipe, marks the job done. Two deployments of the SAME code, split by `WORKER_KINDS`:
 - **Cloud (always-on):** GitHub Actions `.github/workflows/worker.yml` — cron `*/5` + manual dispatch, `WORKER_KINDS=link_in_bio`.
@@ -53,6 +54,7 @@ netlify/functions/
   extract.mjs             serverless extract endpoint (caption + website) -> draft for review
   submit.mjs              iOS Shortcut share-to-app endpoint (token-gated; saves/enqueues directly)
   _lib/extract.mjs        shared extraction core (also used by the worker)
+  _lib/images.mjs         download + re-host cover images to Supabase Storage (permanent URLs)
 docs/ios-shortcut.md      how to build + use the iOS share Shortcut
 worker/
   index.mjs               queue-draining worker (cloud + local)

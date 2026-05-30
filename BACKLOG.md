@@ -21,7 +21,7 @@ Pins usually link to a source recipe site (→ reuse the website path) or hold t
 The web path works (JSON-LD + text → Claude). Harden for sites without JSON-LD, paywalls, consent walls, and odd markup. Add a few real-world test URLs to `scripts/`.
 
 ### 3. Polish / design — owner priority #5
-- **Capture thumbnails for caption recipes** (currently `image_url` is null for IG caption extracts → cards show a placeholder). Pull the reel thumbnail (yt-dlp metadata or the embed) on the worker/serverless side.
+- ✅ **Recipe cover images (done).** Every path captures a cover and re-hosts it to Supabase Storage (`recipe-images`) so it never expires: IG caption/reel cover from the embed, website + link-in-bio `og:image`, video reel via the yt-dlp thumbnail. Helper `netlify/functions/_lib/images.mjs`; `scripts/backfill-images.mjs` fills existing rows.
 - Search + tag filtering in the Library; favorites view.
 - Recipe scaling (2×), shopping-list generation (the structured `ingredients` already support this).
 - Empty/loading/error-state polish; mobile spacing; the review screen UX.
