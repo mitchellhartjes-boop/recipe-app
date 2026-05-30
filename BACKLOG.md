@@ -26,14 +26,24 @@ The web path works (JSON-LD + text → Claude). Harden for sites without JSON-LD
 - Recipe scaling (2×), shopping-list generation (the structured `ingredients` already support this).
 - Empty/loading/error-state polish; mobile spacing; the review screen UX.
 
-## Standing infra upgrade
+## Instagram access
 
-### ★ Real-time video without the owner's PC running
-Today, video-only reels process only when the local worker runs (Instagram blocks video downloads from datacenter IPs, so the cloud worker can't do them). Goal: always-on video like the other paths. Options to evaluate:
-- **Residential/mobile proxy** for `yt-dlp` from the cloud worker (most robust; small monthly cost). Likely the real answer.
-- **Instagram login cookies** fed to `yt-dlp` in the cloud worker (free-ish, but cookies expire and using the main account from a datacenter IP risks an IG flag/lock — use a throwaway IG account if pursued).
-- **Always-on home device** (e.g., a Raspberry Pi / mini PC) running the local worker on a residential IP — free-ish, no account risk.
-- Re-test periodically; Instagram's behavior changes.
+### ✅ Always-on video without the owner's PC — DONE (via Apify)
+Public video/audio reels now process on the cloud worker: **Apify** (`instagram-scraper`) returns the reel's direct CDN video URL, which the cloud worker downloads (no `yt-dlp`, no datacenter-IP block) → ffmpeg → Groq + Claude. `WORKER_KINDS=link_in_bio,video`. Free tier covers personal volume.
+
+### ◇ Audience-restricted reels (the remaining gap)
+~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). **No third party can read these** — embed, yt-dlp, and Apify all fail (`restricted_page`) because the restriction is per-viewer. They show a clear "can't read, it's restricted" message. The only fix is the owner's *own* logged-in session:
+- **cookies.txt** exported from the owner's browser → fed to `yt-dlp`/Apify on the *local* worker (residential IP). Fragile (expires), PC-dependent, small account-flag risk. `--cookies-from-browser` is blocked on the owner's Windows/Chrome (App-Bound cookie encryption) — would need a manual `cookies.txt` export.
+- Or just add those few by hand (paste/screenshot).
+- Revisit only if restricted reels pile up in practice.
+
+## Ops / cleanup (nice-to-have)
+- Connect Netlify to the GitHub repo for auto-deploy on push (currently deploys are manual via netlify-cli).
+- Rotate the secrets that passed through chat (Anthropic, Groq, app password, GitHub PAT, Apify token).
+- Tune the video vision model to Haiku to cut cost if quality holds (transcript carries most of the recipe).
+- The GitHub `*/5` cron is best-effort (often 15–60 min between runs). If snappier link-in-bio/video matters, move the worker off GitHub Actions cron (e.g. a small always-on host or a Netlify background function trigger).
+- Atomic job claiming (conditional `UPDATE ... WHERE status='queued'`) if ever running multiple overlapping workers on the same kinds.
+- Remove Vite scaffold leftovers (`src/App.css`, unused assets); the `tools/yt-dlp.exe` is now only used by the local fallback + `backfill-images.mjs`.
 
 ## Ops / cleanup (nice-to-have)
 - Connect Netlify to the GitHub repo for auto-deploy on push (currently deploys are manual via netlify-cli).

@@ -2,9 +2,10 @@
 // Reusable module for the worker (and the earlier test harness). Worker-side only (needs binaries).
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchReelViaApify } from '../../netlify/functions/_lib/apify.mjs'
 
 const execFileP = promisify(execFile)
 
@@ -57,30 +58,16 @@ async function transcribe(audioPath, groqKey, model) {
   return (await r.text()).trim()
 }
 
-export async function extractVideo({
-  url,
-  apiKey,
-  groqKey,
-  ytdlp,
-  ffmpeg,
-  workdir,
-  model = process.env.VISION_MODEL || 'claude-sonnet-4-6',
-  groqModel = process.env.GROQ_MODEL || 'whisper-large-v3-turbo',
-  maxFrames = 16,
-}) {
-  await rm(workdir, { recursive: true, force: true })
-  await mkdir(workdir, { recursive: true })
+// Download a direct media URL to a file (used for Apify's video URL — a plain CDN link).
+async function downloadToFile(url, dest) {
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } })
+  if (!res.ok) throw new Error(`video download failed (HTTP ${res.status})`)
+  await writeFile(dest, Buffer.from(await res.arrayBuffer()))
+  return dest
+}
 
-  const { stdout: desc } = await execFileP(ytdlp, ['--no-warnings', '--print', '%(description)s', url], {
-    maxBuffer: 10 * 1024 * 1024,
-  })
-  await execFileP(ytdlp, ['--no-warnings', '-f', 'mp4/bestvideo+bestaudio/best', '-o', path.join(workdir, 'video.%(ext)s'), url], {
-    maxBuffer: 10 * 1024 * 1024,
-  })
-  const dl = (await readdir(workdir)).find((f) => f.startsWith('video.'))
-  if (!dl) throw new Error('video did not download')
-  const videoPath = path.join(workdir, dl)
-
+// Shared core: a downloaded video file + its caption -> ffmpeg (audio + frames) -> Groq + Claude.
+async function processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames }) {
   let transcript = ''
   if (groqKey) {
     const audioPath = path.join(workdir, 'audio.mp3')
@@ -100,7 +87,7 @@ export async function extractVideo({
     images.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data.toString('base64') } })
   }
 
-  const parts = [`Post caption:\n${(desc || '').trim().slice(0, 600)}`]
+  const parts = [`Post caption:\n${(caption || '').trim().slice(0, 600)}`]
   if (transcript) parts.push(`\nSpoken transcript:\n${transcript.slice(0, 4000)}`)
   parts.push(`\nBelow are ${images.length} frames sampled in order across the video:`)
 
@@ -125,4 +112,33 @@ export async function extractVideo({
     else throw new Error(`Video extraction returned no JSON: ${raw.slice(0, 200)}`)
   }
   return { recipe, transcript, frameCount: images.length, usage: msg.usage }
+}
+
+const DEFAULT_MODEL = process.env.VISION_MODEL || 'claude-sonnet-4-6'
+const DEFAULT_GROQ_MODEL = process.env.GROQ_MODEL || 'whisper-large-v3-turbo'
+
+// Always-on path (default): Apify reads the reel (handles IG access) and returns a direct video
+// URL + caption + cover image; we download the URL and run the shared pipeline. Works on the cloud
+// worker — no PC, no yt-dlp, no datacenter-IP block. Throws a clear error for restricted reels.
+export async function extractVideoViaApify({ url, apifyToken, apiKey, groqKey, ffmpeg, workdir, model = DEFAULT_MODEL, groqModel = DEFAULT_GROQ_MODEL, maxFrames = 16 }) {
+  await rm(workdir, { recursive: true, force: true })
+  await mkdir(workdir, { recursive: true })
+  const { caption, videoUrl, imageUrl, author } = await fetchReelViaApify(url, apifyToken)
+  if (!videoUrl) throw new Error('Apify returned no video for this reel (it may be a photo post or restricted).')
+  const videoPath = path.join(workdir, 'video.mp4')
+  await downloadToFile(videoUrl, videoPath)
+  const out = await processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames })
+  return { ...out, imageUrl, author }
+}
+
+// Local fallback path: yt-dlp downloads the reel (needs a residential IP + the binary), then the
+// shared pipeline. The worker uses the Apify path by default; this stays for local/offline use.
+export async function extractVideo({ url, apiKey, groqKey, ytdlp, ffmpeg, workdir, model = DEFAULT_MODEL, groqModel = DEFAULT_GROQ_MODEL, maxFrames = 16 }) {
+  await rm(workdir, { recursive: true, force: true })
+  await mkdir(workdir, { recursive: true })
+  const { stdout: desc } = await execFileP(ytdlp, ['--no-warnings', '--print', '%(description)s', url], { maxBuffer: 10 * 1024 * 1024 })
+  await execFileP(ytdlp, ['--no-warnings', '-f', 'mp4/bestvideo+bestaudio/best', '-o', path.join(workdir, 'video.%(ext)s'), url], { maxBuffer: 10 * 1024 * 1024 })
+  const dl = (await readdir(workdir)).find((f) => f.startsWith('video.'))
+  if (!dl) throw new Error('video did not download')
+  return processVideoFile({ videoPath: path.join(workdir, dl), caption: desc, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames })
 }

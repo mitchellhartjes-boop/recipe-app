@@ -8,9 +8,9 @@
 import dotenv from 'dotenv'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
-import { recoverFromWeb, fetchCaption, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
+import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
-import { extractVideo, getThumbnailUrl } from './lib/video.mjs'
+import { extractVideoViaApify } from './lib/video.mjs'
 
 dotenv.config({ path: ['.env', '.env.local'], quiet: true })
 
@@ -20,6 +20,7 @@ const EMAIL = process.env.APP_EMAIL
 const PASSWORD = process.env.APP_PASSWORD
 const ANTHROPIC = process.env.ANTHROPIC_API_KEY
 const GROQ = process.env.GROQ_API_KEY
+const APIFY = process.env.APIFY_TOKEN
 
 const TOOLS = path.resolve('tools')
 const win = process.platform === 'win32'
@@ -60,18 +61,22 @@ async function processJob(supabase, job) {
   await supabase.from('recipe_jobs').update({ status: 'processing' }).eq('id', job.id)
 
   let recipe
+  let coverHint = null
   if (job.kind === 'video') {
+    if (!APIFY) throw new Error('APIFY_TOKEN is not set — needed to fetch the reel video')
     if (!GROQ) console.warn('  (no GROQ_API_KEY — video will use frames only, lower confidence)')
-    const { recipe: r } = await extractVideo({
+    const { recipe: r, imageUrl, author } = await extractVideoViaApify({
       url: job.url,
+      apifyToken: APIFY,
       apiKey: ANTHROPIC,
       groqKey: GROQ,
-      ytdlp: YTDLP,
       ffmpeg: FFMPEG,
       workdir: path.join(TOOLS, 'work', job.id),
     })
     if (!r.found) throw new Error(r.notes || 'No recipe found in the video')
     recipe = toRecord(r, { url: job.url, sourcePlatform: 'instagram', sourceKind: 'video' })
+    if (!recipe.source_author && author) recipe.source_author = author
+    coverHint = imageUrl
   } else if (job.kind === 'link_in_bio') {
     const { recipe: r } = await recoverFromWeb({
       title: job.meta?.title,
@@ -86,12 +91,11 @@ async function processJob(supabase, job) {
     throw new Error(`Unknown job kind: ${job.kind}`)
   }
 
-  // Best-effort permanent cover image (video: the reel's embed cover; link-in-bio: the blog's
-  // og:image). Re-hosted to Supabase Storage so it never expires. Never blocks the recipe save.
+  // Best-effort permanent cover image (video: Apify's cover; link-in-bio: the blog's og:image).
+  // Re-hosted to Supabase Storage so it never expires. Never blocks the recipe save.
   try {
-    let cover = null
-    if (job.kind === 'video') cover = (await getThumbnailUrl(YTDLP, job.url)) || (await fetchCaption(job.url)).imageUrl
-    else if (job.kind === 'link_in_bio') cover = await fetchPageOgImage(recipe.source_url)
+    let cover = coverHint
+    if (!cover && job.kind === 'link_in_bio') cover = await fetchPageOgImage(recipe.source_url)
     const stored = cover ? await rehostImage(supabase, cover, recipe.title) : null
     if (stored) recipe.image_url = stored
   } catch (e) {
