@@ -82,18 +82,34 @@ export default async (req) => {
           draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
         })
       }
-      // Route by where Claude says the recipe lives (blog/bio link vs the video itself).
-      const reason = r.where_is_recipe === 'external_link' || r.external_url ? 'link_in_bio' : 'video_only'
+      // Recipe is on the creator's blog. If the link is in the caption, extract it now (cheap);
+      // otherwise tell the user to open it and share the page (no slow web_search recovery).
+      if (r.where_is_recipe === 'external_link' || r.external_url) {
+        if (r.external_url) {
+          const web = await extractWebPage({ url: r.external_url, apiKey })
+          if (web.recipe.found) {
+            const cover = await rehostImage(await appClient(), web.imageUrl, web.recipe.title || r.title || 'recipe')
+            return json({
+              ok: true,
+              source_kind: 'web',
+              recipe: toDraft({ recipe: web.recipe, sourceUrl: r.external_url, sourcePlatform: 'web', sourceKind: 'web', model: web.model, imageUrl: cover || web.imageUrl }),
+            })
+          }
+        }
+        const who = r.source_author ? `@${r.source_author}'s` : "the creator's"
+        return json({
+          ok: false,
+          reason: 'link_in_bio',
+          message: `This recipe is on ${who} blog, not in the caption. Open the link in the reel and share that web page to the app.`,
+          draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
+        })
+      }
+      // Otherwise the recipe is demonstrated in the video itself.
       return json({
         ok: false,
-        reason,
-        message:
-          r.notes_for_user ||
-          (reason === 'link_in_bio'
-            ? "No recipe in the caption — it's on the creator's blog. We'll recover it."
-            : "No recipe in the caption — this one's likely in the video."),
+        reason: 'video_only',
+        message: r.notes_for_user || "No recipe in the caption — this one's in the video.",
         draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
-        recover: reason === 'link_in_bio' ? { title: r.title, author: r.source_author, externalUrl: r.external_url ?? null } : null,
       })
     }
 

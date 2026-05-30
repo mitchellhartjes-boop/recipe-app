@@ -158,6 +158,11 @@ export default async (req) => {
         const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: cover || res.imageUrl, model: res.model })
         const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
         if (error) throw error
+        // Some IG embed variants expose no cover. Queue a background 'cover' job — the dispatch
+        // trigger runs the worker, which pulls a reliable cover from Apify and fills it in live.
+        if (!record.image_url) {
+          await supabase.from('recipe_jobs').insert({ url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        }
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
       }
       // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
@@ -171,20 +176,32 @@ export default async (req) => {
             "Couldn't read this reel — it looks private or audience-restricted, so Instagram only shows it to logged-in viewers. The app can't read it automatically.",
         })
       }
-      // Route by where Claude says the recipe lives: a blog/bio link -> link_in_bio recovery;
-      // otherwise it's demonstrated in the video itself -> video (Apify) path.
-      const kind = r.where_is_recipe === 'external_link' || r.external_url ? 'link_in_bio' : 'video'
-      const meta =
-        kind === 'link_in_bio'
-          ? { title: r.title ?? null, author: r.source_author ?? null, externalUrl: r.external_url ?? null }
-          : {}
-      const { data, error } = await supabase.from('recipe_jobs').insert({ url: link, kind, meta }).select('id').single()
+      // Recipe is on the creator's blog, not in the caption. If the blog link is right there in
+      // the caption, fetch it now via the cheap+instant website path. (We no longer run the slow,
+      // expensive Claude web_search recovery — the user shares the blog link directly instead.)
+      if (r.where_is_recipe === 'external_link' || r.external_url) {
+        if (r.external_url) {
+          const web = await extractWebPage({ url: r.external_url, apiKey })
+          if (web.recipe.found) {
+            const cover = await rehostImage(supabase, web.imageUrl, web.recipe.title || r.title || 'recipe')
+            const record = toRecord(web.recipe, { url: r.external_url, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover || web.imageUrl, model: web.model })
+            const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+            if (error) throw error
+            return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+          }
+        }
+        const who = r.source_author ? `@${r.source_author}'s` : "the creator's"
+        return json({
+          ok: false,
+          status: 'link_in_bio',
+          kind: 'instagram',
+          message: `This recipe lives on ${who} blog, not in the caption. Open the link in the reel and share that web page to the app to save it.`,
+        })
+      }
+      // Otherwise the recipe is in the video itself -> queue the video (Apify) path.
+      const { data, error } = await supabase.from('recipe_jobs').insert({ url: link, kind: 'video', meta: {} }).select('id').single()
       if (error) throw error
-      const message =
-        kind === 'link_in_bio'
-          ? 'Queued — pulling the full recipe from the creator’s blog. It’ll appear in your library shortly.'
-          : 'Queued — the recipe is in the video. It’ll process the next time your local worker runs.'
-      return json({ ok: true, status: 'queued', kind, job_id: data.id, message })
+      return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
     }
 
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.) — fast path, save directly.

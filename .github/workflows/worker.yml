@@ -34,6 +34,6 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           WORKER_RUN_ONCE: '1'
-          WORKER_KINDS: link_in_bio,video # cloud now handles BOTH: video via Apify's direct URL (no yt-dlp / no IG datacenter block)
+          WORKER_KINDS: link_in_bio,video,cover # video via Apify's direct URL; cover = backfill a caption reel's image via Apify
           FFMPEG_PATH: ffmpeg # from the apt-get install step above
         run: node worker/index.mjs

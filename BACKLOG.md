@@ -12,13 +12,18 @@ Share a reel from Instagram on the phone → it lands in the queue/library witho
 - Verified live end-to-end: 401 on bad token, 400 on no URL, caption + website both saved and RLS-scoped (test rows cleaned up). IG caption fetch confirmed working from Netlify for this function too.
 - Possible follow-ups: generate a one-tap importable `.shortcut` file; handle Instagram `/share/…` redirect URLs (resolve before `parseShortcode`).
 
+## Decisions
+
+### ✅ Link-in-bio: retired the web_search recovery (2026-05-30)
+The Claude `web_search` recovery was ~30¢, slow (minutes), and unreliable (timed out at ~11 min). **Replaced**: `external_link` reels now go through the website path — if the blog URL is in the caption it's fetched inline (instant, ~0.5¢); otherwise the user opens the link and shares the blog page. `recoverFromWeb` kept in the lib as a defensive capability but no longer enqueued. Owner's workflow: just share the blog link.
+
+### ✅ Pinterest: handled via the website path (no dedicated feature needed)
+Owner clicks through the pin to the source recipe site and shares that URL → website path. No Pinterest branch needed for the common case. (Edge case — recipe only in the pin image/description, no source site — would need OCR; defer until it actually comes up.)
+
 ## Next up
 
-### 1. Pinterest support — owner priority #3
-Pins usually link to a source recipe site (→ reuse the website path) or hold the recipe in the pin description/image (→ fetch + Claude, OCR if needed). Add a Pinterest branch to `extract.mjs`.
-
-### 2. Website extraction hardening — owner priority #4
-The web path works (JSON-LD + text → Claude). Harden for sites without JSON-LD, paywalls, consent walls, and odd markup. Add a few real-world test URLs to `scripts/`.
+### 1. Website extraction hardening — owner priority
+The web path works (JSON-LD + text → Claude). Now the **primary** path for link-in-bio + Pinterest too, so worth hardening: sites without JSON-LD, paywalls, consent walls, odd markup. Add a few real-world test URLs to `scripts/`.
 
 ### 3. Polish / design — owner priority #5
 - ✅ **Recipe cover images (done).** Every path captures a cover and re-hosts it to Supabase Storage (`recipe-images`) so it never expires: IG caption/reel cover from the embed, website + link-in-bio `og:image`, video reel via the yt-dlp thumbnail. Helper `netlify/functions/_lib/images.mjs`; `scripts/backfill-images.mjs` fills existing rows.

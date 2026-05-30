@@ -10,6 +10,7 @@ import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
+import { fetchReelViaApify } from '../netlify/functions/_lib/apify.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
 
 dotenv.config({ path: ['.env', '.env.local'], quiet: true })
@@ -59,6 +60,25 @@ function toRecord(r, { url, sourcePlatform, sourceKind }) {
 async function processJob(supabase, job) {
   console.log(`[job ${job.id}] start kind=${job.kind}`)
   await supabase.from('recipe_jobs').update({ status: 'processing' }).eq('id', job.id)
+
+  // Cover-only job: an instant caption recipe whose embed had no cover. Pull a reliable cover from
+  // Apify and attach it to the existing recipe (no new recipe). Never blocks — failure is harmless.
+  if (job.kind === 'cover') {
+    const recipeId = job.meta?.recipe_id
+    let stored = null
+    try {
+      if (recipeId && APIFY) {
+        const { imageUrl } = await fetchReelViaApify(job.url, APIFY)
+        stored = imageUrl ? await rehostImage(supabase, imageUrl, 'reel') : null
+        if (stored) await supabase.from('recipe_recipes').update({ image_url: stored }).eq('id', recipeId)
+      }
+    } catch (e) {
+      console.warn(`[job ${job.id}] cover fetch failed: ${e.message}`)
+    }
+    await supabase.from('recipe_jobs').update({ status: 'done', recipe_id: recipeId ?? null, error: null }).eq('id', job.id)
+    console.log(`[job ${job.id}] cover ${stored ? 'attached' : 'skipped'} -> recipe ${recipeId}`)
+    return
+  }
 
   let recipe
   let coverHint = null

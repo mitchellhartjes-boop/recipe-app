@@ -20,7 +20,7 @@ export default function Library() {
   const refetch = useCallback(async () => {
     const [r, j] = await Promise.all([
       supabase.from('recipe_recipes').select('*').eq('status', 'saved').order('created_at', { ascending: false }),
-      supabase.from('recipe_jobs').select('*').in('status', ['queued', 'processing', 'failed']).order('created_at', { ascending: false }),
+      supabase.from('recipe_jobs').select('*').in('status', ['queued', 'processing', 'failed']).neq('kind', 'cover').order('created_at', { ascending: false }),
     ])
     setRecipes((r.data ?? []) as Recipe[])
     setJobs((j.data ?? []) as RecipeJob[])

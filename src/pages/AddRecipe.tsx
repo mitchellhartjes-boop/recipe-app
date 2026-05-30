@@ -22,23 +22,15 @@ export default function AddRecipe() {
         return
       }
 
-      // Slow paths: hand off to the worker queue, then show it processing in the library.
-      if (result.reason === 'link_in_bio') {
-        await createJob(link, 'link_in_bio', {
-          title: result.recover?.title ?? result.draft.title,
-          author: result.recover?.author ?? result.draft.source_author,
-          externalUrl: result.recover?.externalUrl ?? null,
-        })
-        navigate('/', { state: { queued: 'link_in_bio' } })
-        return
-      }
+      // Recipe is in the video -> hand off to the worker queue; it appears in the library live.
       if (result.reason === 'video_only') {
         await createJob(link, 'video', {})
         navigate('/', { state: { queued: 'video' } })
         return
       }
 
-      // No recipe found anywhere -> let the user enter it manually.
+      // link_in_bio (open the blog link & share it), inaccessible, or no recipe -> show the message
+      // on the review screen so the user can act on it or enter the recipe manually.
       navigate('/review', { state: { draft: result.draft, banner: { kind: 'info', text: result.message } } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
