@@ -18,7 +18,7 @@ goals, and how to run the frontend for iteration). Pure design work is frontend-
 
 | Input | How it's extracted | Where it runs | Latency / availability |
 |---|---|---|---|
-| **Instagram caption** | Fetch `/embed/captioned/` with a **Googlebot UA** → Claude Haiku → structured recipe | Netlify function (serverless) | Instant, always-on |
+| **Instagram caption** | Fetch the public `/embed/captioned/` with our **own identifying UA** (`DillaBot/1.0`) → Claude Haiku → structured recipe. Kill switch: `INSTAGRAM_EMBED_ENABLED=false` | Netlify function (serverless) | Instant, always-on |
 | **Recipe website / Pinterest link** | Fetch page → JSON-LD + visible text → Claude Haiku | Netlify function (serverless) | Instant, always-on |
 | **Link-in-bio reel** (recipe on creator's blog) | If the blog link is in the caption → fetch it via the website path (instant). Otherwise → user opens the link and shares the blog page (website path). | Netlify function (serverless) | Instant |
 | **Video/audio reel** (recipe spoken/on-screen) | **Apify** returns the reel's direct video URL → `ffmpeg` audio+frames → **Groq Whisper** transcript + **Claude Sonnet vision** | GitHub Actions worker | ~5 min, always-on (no PC) |
@@ -109,7 +109,8 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
 
 ## Gotchas / hard-won lessons
 
-- **Instagram + datacenter IPs:** video `yt-dlp` downloads are blocked from cloud IPs (needs residential IP, i.e. local worker, or login cookies/proxy). Caption embed works from anywhere **only with a crawler (Googlebot) User-Agent** — a normal browser UA gets a JS-only shell with no caption in the HTML.
+- **Instagram + datacenter IPs:** video `yt-dlp` downloads are blocked from cloud IPs (needs residential IP, i.e. local worker, or login cookies/proxy).
+- **Instagram embed UA (measured 2026-07-21):** the `/embed/captioned/` endpoint returns **byte-identical HTML** for our honest `DillaBot/1.0` UA and for a spoofed Googlebot UA (verified across 3 real reels: 1558/1558, 1240/1240, 127/127 chars). What matters is only that the UA is **not a plain browser** — a normal Chrome UA gets a 9-char JS shell. So we identify ourselves honestly and lose nothing. **Do not reintroduce the Googlebot spoof**: it buys zero content and is the single least defensible thing in the codebase under App Store Guideline 5.2.2 (see `docs/APP-STORE-STRATEGY.md` §4.1).
 - **`web_fetch_20260209` server tool 500s** in this setup — link-in-bio recovery uses **`web_search` only** (its dynamic filtering already pulls page content). Web tools need Sonnet/Opus, not Haiku.
 - **Netlify sync functions ~10–26s cap** → slow paths (link-in-bio web_search ~60-100s, video) must be async (the worker), not in the function.
 - **Supabase shared project:** keep everything `recipe_`-prefixed; the `recipe_set_updated_at` trigger fn has `search_path=''` set. The owner's OTHER tables (food_logs, etc.) have permissive `USING(true)` RLS — a pre-existing issue in their other app, not ours; don't touch.

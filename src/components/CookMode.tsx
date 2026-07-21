@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { CloseIcon, CheckIcon } from './icons'
 import type { IngredientGroup } from '../lib/groupIngredients'
+import type { Recipe } from '../lib/types'
+import SourceCredit from './SourceCredit'
 
 type Props = {
   title: string
+  recipe: Recipe
   steps: string[]
   ingredients: string[] // already scaled for display, indexed by original position
   ingredientGroups: IngredientGroup[] // grouping (by original index) for the sheet
@@ -16,7 +19,7 @@ type Props = {
 // Full-screen, distraction-free cooking view: one big step at a time, a progress
 // bar, an ingredients peek-sheet, and a screen wake-lock so the phone won't dim
 // on the counter.
-export default function CookMode({ title, steps, ingredients, ingredientGroups, checked, onToggle, initialStep = 0, onClose }: Props) {
+export default function CookMode({ title, recipe, steps, ingredients, ingredientGroups, checked, onToggle, initialStep = 0, onClose }: Props) {
   const [i, setI] = useState(Math.min(initialStep, Math.max(0, steps.length - 1)))
   const [sheet, setSheet] = useState(false)
   const wakeRef = useRef<{ release: () => Promise<void> } | null>(null)
@@ -66,7 +69,10 @@ export default function CookMode({ title, steps, ingredients, ingredientGroups, 
         </button>
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-sm font-semibold">{title}</p>
-          <p className="text-xs text-stone-400">Step {i + 1} of {steps.length} · screen stays on</p>
+          <div className="flex items-center gap-1.5">
+            <p className="shrink-0 text-xs text-stone-400">Step {i + 1} of {steps.length}</p>
+            <SourceCredit recipe={recipe} compact />
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { addGroceryItems } from '../lib/useGrocery'
 import GrocerySheet from '../components/GrocerySheet'
 import CookMode from '../components/CookMode'
 import RecipeCover from '../components/RecipeCover'
+import SourceCredit from '../components/SourceCredit'
 import { StarIcon, ClockIcon, UsersIcon, MinusIcon, PlusIcon, CheckIcon, FlameIcon, CartIcon } from '../components/icons'
 
 export default function RecipeDetail() {
@@ -142,12 +143,9 @@ export default function RecipeDetail() {
             <UsersIcon className="h-3.5 w-3.5" /> serves {recipe.servings}
           </span>
         )}
-        {recipe.source_url && (
-          <a href={recipe.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-paper px-3 py-1.5 text-xs font-medium text-paprika-700 shadow-sm">
-            {recipe.source_author || 'source'} ↗
-          </a>
-        )}
       </div>
+
+      <SourceCredit recipe={recipe} />
 
       {recipe.tags?.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -274,6 +272,7 @@ export default function RecipeDetail() {
       {cooking && (
         <CookMode
           title={recipe.title}
+          recipe={recipe}
           steps={steps}
           ingredients={scaledIngredients}
           ingredientGroups={ingredientGroups}

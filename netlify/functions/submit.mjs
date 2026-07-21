@@ -99,7 +99,6 @@ function toRecord(r, { url, sourcePlatform, sourceKind, imageUrl, model }) {
       model: model ?? null,
       confidence: r.confidence ?? null,
       via: 'ios_shortcut',
-      photo_query: r.photo_query ?? null,
       notes: r.notes ?? r.notes_for_user ?? null,
     },
   }
@@ -164,7 +163,8 @@ export default async (req) => {
   // The way to capture audience-restricted or age-gated reels (e.g. cocktails):
   // the user screenshots what they can already see and shares the image. Claude
   // vision reads the recipe; the screenshot is NOT used as the cover (it's full
-  // of app chrome) — we fetch a clean stock photo from photo_query instead.
+  // of app chrome). No cover is set — the app shows its designed gradient +
+  // emoji card until the user adds their own photo.
   const img = getImage(body, urlObj)
   if (img) {
     try {
@@ -178,8 +178,7 @@ export default async (req) => {
           message: r.notes_for_user || "Couldn't find a recipe in that screenshot. Make sure the ingredients and steps are visible.",
         })
       }
-      const cover = await coverImage(supabase, { srcUrl: null, photoQuery: r.photo_query, keyHint: r.title || 'recipe' })
-      const record = toRecord(r, { url: null, sourcePlatform: 'instagram', sourceKind: 'screenshot', imageUrl: cover, model })
+      const record = toRecord(r, { url: null, sourcePlatform: 'instagram', sourceKind: 'screenshot', imageUrl: null, model })
       const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'screenshot', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” from your screenshot.` })
@@ -230,7 +229,7 @@ export default async (req) => {
         if (r.external_url) {
           const web = await extractWebPage({ url: r.external_url, apiKey })
           if (web.recipe.found) {
-            const cover = await coverImage(supabase, { srcUrl: web.imageUrl, photoQuery: web.recipe.photo_query, keyHint: web.recipe.title || r.title || 'recipe' })
+            const cover = await coverImage(supabase, { srcUrl: web.imageUrl, keyHint: web.recipe.title || r.title || 'recipe' })
             const record = toRecord(web.recipe, { url: r.external_url, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
             const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
             if (error) throw error
@@ -254,7 +253,7 @@ export default async (req) => {
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.) — fast path, save directly.
     const res = await extractWebPage({ url: link, apiKey })
     if (res.recipe.found) {
-      const cover = await coverImage(supabase, { srcUrl: res.imageUrl, photoQuery: res.recipe.photo_query, keyHint: res.recipe.title || 'recipe' })
+      const cover = await coverImage(supabase, { srcUrl: res.imageUrl, keyHint: res.recipe.title || 'recipe' })
       const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
       const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
       if (error) throw error

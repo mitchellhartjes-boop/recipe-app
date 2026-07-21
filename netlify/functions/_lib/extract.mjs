@@ -9,10 +9,26 @@ import Anthropic from '@anthropic-ai/sdk'
 // (EXTRACTION_MODEL=claude-sonnet-4-6 or claude-opus-4-8) for higher fidelity.
 const EXTRACTION_MODEL = process.env.EXTRACTION_MODEL || 'claude-haiku-4-5'
 
-// Instagram serves a lightweight, pre-rendered "captioned" embed to crawlers,
-// but a JS-only app-shell (caption loaded later via XHR) to normal browser UAs.
-// Identifying as Googlebot gets the caption in the initial server HTML.
-const CRAWLER_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+// Our own honest, identifying User-Agent for the public Instagram embed fetch.
+//
+// We deliberately do NOT impersonate Googlebot here. Instagram serves the
+// pre-rendered "captioned" embed to search crawlers and a JS-only shell to
+// others, so a spoofed crawler UA yields more content — but spoofing is
+// impersonation to defeat a server-side access decision, it can't be described
+// honestly in an App Store review note (Guideline 5.2.2 asks you to show you're
+// permitted to access a third-party service), and it's detectable via reverse
+// DNS. We identify ourselves, fetch the same public URL the user just shared,
+// once per explicit user action, at human rates. If the embed returns no
+// caption we fall through to the other paths (screenshot / website / video).
+const EMBED_UA =
+  process.env.EMBED_USER_AGENT ||
+  'DillaBot/1.0 (+https://recipe-vault-mh.netlify.app/bot; recipe import on behalf of a user)'
+
+// Server-side kill switch for the Instagram embed path. If Meta ever objects,
+// set INSTAGRAM_EMBED_ENABLED=false in the Netlify env — no redeploy of the
+// native app, no App Store resubmission. Callers fall back to asking the user
+// for a screenshot, which needs no third-party access at all.
+export const instagramEmbedEnabled = () => process.env.INSTAGRAM_EMBED_ENABLED !== 'false'
 
 // Normal browser UA for fetching generic recipe pages.
 const WEB_UA =
@@ -63,7 +79,7 @@ async function fetchReelCover(html) {
   try {
     const m = html.match(/https:\/\/lookaside\.instagram\.com\/seo\/google_widget\/crawler\/\?media_id=\d+/i)
     if (!m) return null
-    const res = await fetch(m[0], { headers: { 'User-Agent': CRAWLER_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
+    const res = await fetch(m[0], { headers: { 'User-Agent': EMBED_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
     if (!res.ok) return null
     return extractOgImage(await res.text())
   } catch {
@@ -80,12 +96,25 @@ function extractJsonLd(html) {
   return blocks.join('\n').slice(0, 12000)
 }
 
-// Fetch a public reel's caption via the /embed/captioned/ endpoint (crawler UA).
+// Fetch a public reel's caption via the public /embed/captioned/ endpoint —
+// the same URL the user just shared, fetched once, logged out, with our own
+// identifying UA. Honors the INSTAGRAM_EMBED_ENABLED kill switch.
 export async function fetchCaption(url) {
   const shortcode = parseShortcode(url)
+  if (!instagramEmbedEnabled()) {
+    return {
+      shortcode,
+      embedUrl: null,
+      text: '',
+      imageUrl: null,
+      looksWalled: false,
+      inaccessible: true,
+      disabled: true,
+    }
+  }
   const embedUrl = `https://www.instagram.com/reel/${shortcode}/embed/captioned/`
   const res = await fetch(embedUrl, {
-    headers: { 'User-Agent': CRAWLER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+    headers: { 'User-Agent': EMBED_UA, 'Accept-Language': 'en-US,en;q=0.9' },
   })
   if (!res.ok) throw new Error(`Instagram embed fetch failed (HTTP ${res.status})`)
   const html = await res.text()
@@ -102,7 +131,7 @@ export async function fetchCaption(url) {
 }
 
 // Shared JSON contract for all extractors (text + vision) so they return the
-// same recipe shape. `photo_query` powers the stock-photo cover fallback.
+// same recipe shape.
 const SCHEMA_BLOCK = `Respond with ONLY a JSON object (no prose, no markdown code fences) matching exactly:
 {
   "found": boolean,              // true ONLY if there's an actual recipe (ingredients and/or steps)
@@ -116,7 +145,6 @@ const SCHEMA_BLOCK = `Respond with ONLY a JSON object (no prose, no markdown cod
   "ingredients": [ { "raw": string, "quantity": string|null, "unit": string|null, "item": string|null, "section": string|null } ],
   "steps": [ string ],            // ordered instruction steps, cleaned of emoji clutter
   "tags": [ string ],             // lowercase, e.g. ["dinner","pasta","cajun"]
-  "photo_query": string|null,     // 2-5 word stock-photo search for a representative photo of the finished dish/drink (the dish itself; NO @handles/brands), e.g. "old fashioned whiskey cocktail", "creamy cajun pasta"
   "external_url": string|null,    // a recipe/blog URL if one appears (e.g. "recipe on my blog: ...")
   "where_is_recipe": "caption"|"external_link"|"video"|"unknown",  // see below — drives how we fetch it
   "notes_for_user": string|null   // when found=false, a short reason, e.g. "Recipe is demonstrated in the video, not written in the caption"
@@ -206,8 +234,10 @@ export async function extractRecipeFromImage({ base64, mediaType, apiKey }) {
 }
 
 export async function extractReel(url, { apiKey } = {}) {
-  const { embedUrl, text, imageUrl, looksWalled, inaccessible, shortcode } = await fetchCaption(url)
+  const { embedUrl, text, imageUrl, looksWalled, inaccessible, shortcode, disabled } = await fetchCaption(url)
   if (inaccessible || looksWalled) {
+    // Point the user at the screenshot path: it needs no third-party access at
+    // all, and it reads restricted/age-gated reels the public embed can't.
     return {
       source_platform: 'instagram',
       source_url: url,
@@ -216,7 +246,12 @@ export async function extractReel(url, { apiKey } = {}) {
       imageUrl,
       captionChars: text.length,
       inaccessible: true,
-      recipe: { found: false, notes_for_user: 'Instagram would not show this reel without logging in — it looks private or audience-restricted.' },
+      recipe: {
+        found: false,
+        notes_for_user: disabled
+          ? 'Link importing from Instagram is turned off right now. Screenshot the recipe and share the image instead — that works for any reel.'
+          : "Instagram didn't return this reel's caption — it may be private, age-restricted, or the recipe may only be in the video. Screenshot the recipe and share the image instead; that works for any reel.",
+      },
     }
   }
   const { recipe, model, usage } = await extractRecipeFromText({ text, sourceUrl: url, apiKey })
