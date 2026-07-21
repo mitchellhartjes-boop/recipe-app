@@ -29,9 +29,17 @@ export type ExtractResult =
       recover?: { title: string | null; author: string | null; externalUrl: string | null } | null
     }
 
+// Where the serverless functions live. On the web this is same-origin (''), so
+// requests stay relative. In the native app the bundle is served from
+// capacitor://localhost, which has no functions — so builds set
+// VITE_API_BASE to the deployed origin and we call it absolutely.
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+
+export const apiUrl = (path: string) => `${API_BASE}${path}`
+
 // Synchronous fast-path extraction (Instagram caption + recipe websites).
 export async function extractRecipe(url: string): Promise<ExtractResult> {
-  const res = await fetch('/.netlify/functions/extract', {
+  const res = await fetch(apiUrl('/.netlify/functions/extract'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),

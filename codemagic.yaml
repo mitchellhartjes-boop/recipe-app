@@ -1,0 +1,79 @@
+# Codemagic: build the iOS app from this repo — no Mac required.
+#
+# Adapted from the Sounder (fishing app) pipeline, which is already proven on
+# this Apple Developer account. Differences: Vite instead of Next.js static
+# export, webDir dist/, and VITE_API_BASE instead of NEXT_PUBLIC_API_BASE.
+#
+# One-time setup in the Codemagic UI:
+#   1. Connect this GitHub repo.
+#   2. Teams > Integrations > App Store Connect: add an API key (App Manager
+#      role). The Sounder key can be reused, or add one named "dilla-asc".
+#   3. Create an environment group "dilla" with:
+#        VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY   (publishable — safe)
+#        CERT_KEY_B64   (single-line base64 of the signing RSA key)
+#   4. In App Store Connect, create the app record with the bundle id below.
+#
+# ⚠️ CERT_KEY_B64 must be SINGLE-LINE base64. A multiline PEM pasted into an env
+#    var does not survive — this cost a debugging cycle on Sounder; don't repeat it.
+#
+# Every push to main builds, signs, and uploads to TestFlight.
+
+workflows:
+  ios-testflight:
+    name: iOS · TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: dilla-asc
+    environment:
+      groups:
+        - dilla
+      vars:
+        VITE_API_BASE: "https://recipe-vault-mh.netlify.app"
+        BUNDLE_ID: "com.mitchellhartjes.dilla"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+      node: 22.14.0 # Capacitor CLI requires Node >= 22
+      xcode: latest # must be Xcode 26+ / iOS 26 SDK for App Store submission
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build the web app for native
+        script: npm run build:native
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+      - name: Fetch signing files
+        script: |
+          keychain initialize
+          # base64 survives any paste; a multiline PEM in an env var does not.
+          echo "$CERT_KEY_B64" | base64 --decode > /tmp/cert_key
+          # NOTE: when the Share Extension lands it is a SECOND bundle id and
+          # needs its own profile — loop over both ids here at that point:
+          #   for ID in "$BUNDLE_ID" "$BUNDLE_ID.ShareExtension"; do ... done
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE --create \
+            --certificate-key=@file:/tmp/cert_key
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Set build number
+        script: |
+          cd ios/App
+          agvtool new-version -all $BUILD_NUMBER
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
