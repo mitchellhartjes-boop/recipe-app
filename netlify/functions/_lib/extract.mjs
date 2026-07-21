@@ -101,11 +101,11 @@ export async function fetchCaption(url) {
   return { shortcode, embedUrl, text, imageUrl, looksWalled, inaccessible }
 }
 
-const SYSTEM_PROMPT = `You extract structured recipes from web/social text (Instagram captions, recipe blog pages, etc.). The text may include site chrome ("Log in", "Sign up", nav, ads, JSON-LD) — use whatever is useful and ignore the rest.
-
-Respond with ONLY a JSON object (no prose, no markdown code fences) matching exactly:
+// Shared JSON contract for all extractors (text + vision) so they return the
+// same recipe shape. `photo_query` powers the stock-photo cover fallback.
+const SCHEMA_BLOCK = `Respond with ONLY a JSON object (no prose, no markdown code fences) matching exactly:
 {
-  "found": boolean,              // true ONLY if the text contains an actual recipe (ingredients and/or steps)
+  "found": boolean,              // true ONLY if there's an actual recipe (ingredients and/or steps)
   "title": string|null,
   "description": string|null,    // one short summary sentence, if available
   "source_author": string|null,  // the creator's @handle or name if visible
@@ -113,20 +113,35 @@ Respond with ONLY a JSON object (no prose, no markdown code fences) matching exa
   "prep_minutes": number|null,
   "cook_minutes": number|null,
   "total_minutes": number|null,
-  "ingredients": [ { "raw": string, "quantity": string|null, "unit": string|null, "item": string|null } ],
+  "ingredients": [ { "raw": string, "quantity": string|null, "unit": string|null, "item": string|null, "section": string|null } ],
   "steps": [ string ],            // ordered instruction steps, cleaned of emoji clutter
   "tags": [ string ],             // lowercase, e.g. ["dinner","pasta","cajun"]
-  "external_url": string|null,    // a recipe/blog URL if one appears in the text (e.g. "recipe on my blog: ...")
+  "photo_query": string|null,     // 2-5 word stock-photo search for a representative photo of the finished dish/drink (the dish itself; NO @handles/brands), e.g. "old fashioned whiskey cocktail", "creamy cajun pasta"
+  "external_url": string|null,    // a recipe/blog URL if one appears (e.g. "recipe on my blog: ...")
   "where_is_recipe": "caption"|"external_link"|"video"|"unknown",  // see below — drives how we fetch it
-  "notes_for_user": string|null   // when found=false, a short reason, e.g. "Recipe is demonstrated in the video, not written in the caption" or "Recipe is linked in the creator's bio"
+  "notes_for_user": string|null   // when found=false, a short reason, e.g. "Recipe is demonstrated in the video, not written in the caption"
 }
 Parse quantities into raw + structured parts where you can ("2 cups flour" -> quantity "2", unit "cup", item "flour"); always keep the original line in "raw". If there is no real recipe, set found=false, fill notes_for_user, and still capture title/source_author/external_url if visible.
 
-Set "where_is_recipe" to where the actual recipe lives:
+INGREDIENT SECTIONS: when a recipe splits its ingredients into named parts — e.g. "For the dressing", "For the salad", "Sauce:", "Marinade", "Topping", "Cake / Frosting" — set each ingredient's "section" to that short part name (e.g. "Dressing", "Salad"). Use the recipe's own headings; keep names short (1-2 words, Title Case), no "for the" prefix. If the recipe is a single flat list with no parts, set "section" to null for every ingredient. Only create sections the recipe actually indicates — never invent them.`
+
+const WHERE_BLOCK = `Set "where_is_recipe" to where the actual recipe lives:
 - "caption": the full recipe (ingredients/steps) is written here in the text (this is the found=true case).
 - "external_link": the text points to the recipe on a website/blog or says "link in bio / recipe on my blog / full recipe at ..." — i.e. it lives on another page. Capture external_url if a URL is visible.
 - "video": there is NO recipe and NO external recipe link — the caption only names/teases the dish (e.g. "save this!", dish name + emojis) and the recipe is demonstrated or spoken in the VIDEO itself.
 - "unknown": you genuinely can't tell. When unsure between "video" and "external_link", prefer "video" unless the caption clearly references a blog/website/bio link.`
+
+const SYSTEM_PROMPT = `You extract structured recipes from web/social text (Instagram captions, recipe blog pages, etc.). The text may include site chrome ("Log in", "Sign up", nav, ads, JSON-LD) — use whatever is useful and ignore the rest.
+
+${SCHEMA_BLOCK}
+
+${WHERE_BLOCK}`
+
+const VISION_SYSTEM_PROMPT = `You extract a structured recipe from an IMAGE — usually a phone screenshot of an Instagram reel/post (it may show on-screen recipe text, the caption beneath the video, plus app chrome, the status bar, and like/comment buttons) or a photo of a printed/handwritten recipe. Read ALL legible text and any on-screen quantities; ignore app UI, navigation, timestamps, and unrelated chrome.
+
+${SCHEMA_BLOCK}
+
+The recipe is in the image itself, so set "where_is_recipe" to "caption" when found=true. Only set "external_url" if a recipe URL is actually visible in the image.`
 
 function stripFences(s) {
   return s
@@ -152,6 +167,42 @@ export async function extractRecipeFromText({ text, sourceUrl, apiKey }) {
     throw new Error(`Model did not return valid JSON: ${raw.slice(0, 200)}`)
   }
   return { recipe, model: EXTRACTION_MODEL, usage: msg.usage }
+}
+
+// Vision model for reading recipes off a screenshot/photo. Haiku is weak at
+// dense screenshot OCR; Sonnet matches the video-frame vision path. Overridable.
+const VISION_MODEL = process.env.VISION_MODEL || 'claude-sonnet-4-6'
+const VISION_MEDIA = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+
+// Extract a recipe from an image (base64). Used by the share endpoint's
+// screenshot path — the way to capture audience-restricted / age-gated reels
+// (e.g. cocktails) that no anonymous fetch can read. Returns the same shape as
+// the text extractors.
+export async function extractRecipeFromImage({ base64, mediaType, apiKey }) {
+  const type = VISION_MEDIA.has(mediaType) ? mediaType : 'image/jpeg'
+  const client = new Anthropic({ apiKey })
+  const msg = await client.messages.create({
+    model: VISION_MODEL,
+    max_tokens: 3000,
+    system: VISION_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: type, data: base64 } },
+          { type: 'text', text: 'Extract the recipe from this image as the specified JSON.' },
+        ],
+      },
+    ],
+  })
+  const raw = msg.content.find((b) => b.type === 'text')?.text ?? ''
+  let recipe
+  try {
+    recipe = JSON.parse(stripFences(raw))
+  } catch {
+    throw new Error(`Vision model did not return valid JSON: ${raw.slice(0, 200)}`)
+  }
+  return { recipe, model: VISION_MODEL, usage: msg.usage }
 }
 
 export async function extractReel(url, { apiKey } = {}) {

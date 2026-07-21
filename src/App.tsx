@@ -4,6 +4,9 @@ import { useAuth } from './lib/auth'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Library from './pages/Library'
+import Category from './pages/Category'
+import Search from './pages/Search'
+import Grocery from './pages/Grocery'
 import AddRecipe from './pages/AddRecipe'
 import ReviewRecipe from './pages/ReviewRecipe'
 import RecipeDetail from './pages/RecipeDetail'
@@ -25,6 +28,9 @@ export default function App() {
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route element={<Protected><Layout /></Protected>}>
           <Route path="/" element={<Library />} />
+          <Route path="/c/:slug" element={<Category />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/grocery" element={<Grocery />} />
           <Route path="/add" element={<AddRecipe />} />
           <Route path="/review" element={<ReviewRecipe />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />

@@ -1,7 +1,52 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'robots.txt'],
+      manifest: {
+        name: 'Dilla',
+        short_name: 'Dilla',
+        description: 'Dilla — your personal recipe vault. Every recipe you love, in one place.',
+        theme_color: '#c2410c',
+        background_color: '#faf8f5',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
+        categories: ['food', 'lifestyle'],
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/\.netlify\//],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Cache the re-hosted recipe cover images (Supabase Storage) so the
+        // library still shows pictures on a flaky kitchen connection.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.endsWith('supabase.co') && url.pathname.includes('/storage/'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'recipe-images',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+      // The service worker is a production concern; keep it out of `vite dev`
+      // so it never interferes with hot-module reload.
+      devOptions: { enabled: false },
+    }),
+  ],
 })

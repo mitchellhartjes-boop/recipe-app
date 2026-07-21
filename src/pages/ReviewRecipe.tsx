@@ -95,7 +95,7 @@ export default function ReviewRecipe() {
   }
 
   const inputClass =
-    'w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100'
+    'w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40'
 
   return (
     <div className="mx-auto max-w-2xl pb-24">
@@ -162,7 +162,7 @@ export default function ReviewRecipe() {
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={inputClass} placeholder="Tweaks, who liked it, etc." />
         </div>
 
-        {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
       </div>
 
       <div className="mt-5 flex gap-3">
@@ -208,7 +208,7 @@ function EditableList({
               onChange={(e) => setItems(updateList(items, i, e.target.value))}
               rows={ordered ? 2 : 1}
               placeholder={placeholder}
-              className="flex-1 resize-y rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100"
+              className="flex-1 resize-y rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
             />
             <button
               type="button"

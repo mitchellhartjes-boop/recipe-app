@@ -40,6 +40,40 @@ export async function rehostImage(supabase, srcUrl, keyHint = 'recipe') {
   }
 }
 
+// Find a representative stock photo for a recipe that has no cover of its own
+// (cocktails, screenshots, manual adds). Uses the free Pexels API; returns a
+// direct image URL or null. No-ops gracefully until PEXELS_API_KEY is set, so
+// this can ship dormant and "wake up" the moment the key is added to the env.
+// Never throws.
+export async function findStockPhoto(query) {
+  const key = process.env.PEXELS_API_KEY
+  if (!key || !query || typeof query !== 'string') return null
+  try {
+    const url = `https://api.pexels.com/v1/search?per_page=1&orientation=landscape&query=${encodeURIComponent(query.trim())}`
+    const res = await fetch(url, { headers: { Authorization: key } })
+    if (!res.ok) return null
+    const data = await res.json()
+    const photo = data?.photos?.[0]
+    if (!photo) return null
+    // Prefer a sensibly-sized rendition; fall back through what's available.
+    return photo.src?.large || photo.src?.landscape || photo.src?.original || photo.src?.medium || null
+  } catch {
+    return null
+  }
+}
+
+// Resolve a permanent cover for a recipe: try the source image first (re-hosted
+// so it never rots); if there isn't one, fall back to a Pexels stock photo from
+// `photoQuery` (also re-hosted). Returns a permanent public URL or null (caller
+// then shows the designed gradient+emoji card). Never throws.
+export async function coverImage(supabase, { srcUrl, photoQuery, keyHint = 'recipe' }) {
+  const direct = await rehostImage(supabase, srcUrl, keyHint)
+  if (direct) return direct
+  const stock = await findStockPhoto(photoQuery)
+  if (stock) return rehostImage(supabase, stock, keyHint)
+  return null
+}
+
 // Cached Supabase client signed in as the app user — for callers that don't already have one
 // (e.g. the extract function). Returns null if config/sign-in is unavailable. Never throws.
 let _clientPromise = null

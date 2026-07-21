@@ -58,7 +58,7 @@ export default function AddRecipe() {
             onChange={(e) => setUrl(e.target.value)}
             disabled={busy}
             placeholder="https://www.instagram.com/reel/…"
-            className="flex-1 rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 disabled:opacity-60"
+            className="flex-1 rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 disabled:opacity-60 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
           />
           <button
             type="submit"
@@ -69,7 +69,7 @@ export default function AddRecipe() {
           </button>
         </div>
         {busy && <p className="mt-3 text-sm text-stone-500">Working on it — just a few seconds.</p>}
-        {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
       </form>
     </div>
   )

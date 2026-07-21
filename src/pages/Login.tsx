@@ -41,7 +41,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <img src="/favicon.svg" alt="" className="mx-auto mb-4 h-14 w-14 rounded-2xl shadow-card" />
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Recipe Vault</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Dilla</h1>
           <p className="mt-1.5 text-sm text-stone-500">Every recipe you love, in one place.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-paper p-6 shadow-card">
@@ -52,7 +52,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100"
+              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
               placeholder="you@example.com"
             />
           </div>
@@ -64,7 +64,7 @@ export default function Login() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100"
+              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
               placeholder="••••••••"
             />
           </div>

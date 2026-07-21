@@ -3,6 +3,7 @@ export type Ingredient = {
   quantity?: string
   unit?: string
   item?: string
+  section?: string // optional group label, e.g. "Dressing" / "Salad" (multi-part recipes)
 }
 
 export type SourcePlatform = 'instagram' | 'web' | 'pinterest' | 'manual'
@@ -30,6 +31,15 @@ export type Recipe = {
   extraction_meta: Record<string, unknown>
   created_at: string
   updated_at: string
+}
+
+export type GroceryItem = {
+  id: string
+  user_id: string
+  text: string
+  checked: boolean
+  source_recipe_id: string | null
+  created_at: string
 }
 
 export type RecipeJob = {

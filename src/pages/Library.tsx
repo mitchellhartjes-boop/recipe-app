@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import type { Recipe, RecipeJob } from '../lib/types'
+import { useRecipes } from '../lib/useRecipes'
+import { CATEGORIES, recipeInCategory, TILE_BG } from '../lib/categories'
 
 const KIND_LABEL: Record<string, string> = {
   link_in_bio: 'Recovering recipe from the blog',
@@ -9,40 +9,75 @@ const KIND_LABEL: Record<string, string> = {
   unknown: 'Processing',
 }
 
+function Tile({
+  to,
+  slug,
+  label,
+  count,
+  hero = false,
+}: {
+  to: string
+  slug: string
+  label: string
+  count: number
+  hero?: boolean
+}) {
+  const span = hero ? 'col-span-2 sm:col-span-3 lg:col-span-4' : ''
+  const height = hero ? 'h-36 sm:h-48' : 'h-32 sm:h-40'
+  const bg = TILE_BG[slug] ?? TILE_BG.bread
+  return (
+    <Link
+      to={to}
+      className={`group relative overflow-hidden rounded-2xl shadow-card transition active:scale-[0.98] ${bg} ${span} ${height}`}
+    >
+      {/* Real food photo (committed static asset), gently zooms on hover. The
+          gradient bg shows behind it while it loads / if it ever 404s. */}
+      <img
+        src={`/categories/${slug}.jpg`}
+        alt=""
+        loading="lazy"
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      />
+      {/* Dark scrim so the label stays readable on any photo */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/5" />
+      <div className="absolute inset-x-0 bottom-0 p-3.5">
+        <h3 className={`font-display font-semibold leading-tight text-white ${hero ? 'text-2xl' : 'text-lg'}`}>
+          {label}
+        </h3>
+        <p className="mt-0.5 text-xs text-white/85">
+          {count} {count === 1 ? 'recipe' : 'recipes'}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
 export default function Library() {
   const location = useLocation()
   const queuedKind = (location.state as { queued?: string } | null)?.queued ?? null
+  const { recipes, jobs, loading, dismissJob } = useRecipes()
 
-  const [recipes, setRecipes] = useState<Recipe[]>([])
-  const [jobs, setJobs] = useState<RecipeJob[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const refetch = useCallback(async () => {
-    const [r, j] = await Promise.all([
-      supabase.from('recipe_recipes').select('*').eq('status', 'saved').order('created_at', { ascending: false }),
-      supabase.from('recipe_jobs').select('*').in('status', ['queued', 'processing', 'failed']).neq('kind', 'cover').order('created_at', { ascending: false }),
-    ])
-    setRecipes((r.data ?? []) as Recipe[])
-    setJobs((j.data ?? []) as RecipeJob[])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    void refetch()
-    const channel = supabase
-      .channel('library-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipe_recipes' }, () => void refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipe_jobs' }, () => void refetch())
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(channel)
+  // One pass over the recipes to compute each category's count.
+  const counts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const c of CATEGORIES) m.set(c.slug, 0)
+    for (const r of recipes) {
+      for (const c of CATEGORIES) {
+        if (recipeInCategory(r, c)) m.set(c.slug, m.get(c.slug)! + 1)
+      }
     }
-  }, [refetch])
+    return m
+  }, [recipes])
 
-  async function dismissJob(id: string) {
-    setJobs((prev) => prev.filter((x) => x.id !== id))
-    await supabase.from('recipe_jobs').delete().eq('id', id)
-  }
+  // Categories sorted by recipe count (largest first); ties keep their declared
+  // order. Empty categories sink to the bottom but still show (ready to fill).
+  const sortedCategories = useMemo(
+    () =>
+      CATEGORIES.map((c, i) => ({ c, i }))
+        .sort((a, b) => counts.get(b.c.slug)! - counts.get(a.c.slug)! || a.i - b.i)
+        .map(({ c }) => c),
+    [counts],
+  )
 
   if (loading) {
     return <div className="py-20 text-center text-sm text-stone-400">Loading your recipes…</div>
@@ -51,21 +86,16 @@ export default function Library() {
   const isEmpty = recipes.length === 0 && jobs.length === 0
 
   return (
-    <div>
-      <div className="mb-6 flex items-end justify-between">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Your recipes</h1>
-        {recipes.length > 0 && <span className="text-sm text-stone-400">{recipes.length}</span>}
-      </div>
-
+    <div className="space-y-5">
       {queuedKind && (
-        <p className="mb-5 rounded-xl bg-paprika-50 px-4 py-3 text-sm text-paprika-800">
+        <p className="rounded-xl bg-paprika-50 px-4 py-3 text-sm text-paprika-800">
           Queued! {queuedKind === 'video' ? 'Pulling the recipe out of the video' : 'Recovering the full recipe from the blog'} — it’ll
-          appear here automatically. (Make sure your recipe worker is running.)
+          appear here automatically.
         </p>
       )}
 
       {jobs.length > 0 && (
-        <div className="mb-6 space-y-2">
+        <div className="space-y-2">
           {jobs.map((job) => (
             <div key={job.id} className="flex items-center gap-3 rounded-xl border border-stone-200 bg-paper px-4 py-3 shadow-sm">
               {job.status === 'failed' ? (
@@ -94,7 +124,7 @@ export default function Library() {
 
       {isEmpty ? (
         <div className="mx-auto max-w-md py-16 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-paprika-50 text-3xl">🍲</div>
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-paprika-50 text-3xl">🍳</div>
           <h2 className="font-display text-2xl font-semibold">Your cookbook is empty</h2>
           <p className="mx-auto mt-2 max-w-xs text-sm text-stone-500">
             Found a recipe on Instagram? Paste the reel link and it lands here, neatly organized.
@@ -107,25 +137,10 @@ export default function Library() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((r) => (
-            <Link
-              key={r.id}
-              to={`/recipe/${r.id}`}
-              className="group overflow-hidden rounded-2xl bg-paper shadow-card transition hover:-translate-y-0.5"
-            >
-              <div className="aspect-[4/3] w-full overflow-hidden bg-stone-100">
-                {r.image_url ? (
-                  <img src={r.image_url} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-4xl">🍽️</div>
-                )}
-              </div>
-              <div className="p-4">
-                <h3 className="font-display text-lg font-semibold leading-snug">{r.title}</h3>
-                {r.source_author && <p className="mt-1 text-xs text-stone-400">{r.source_author}</p>}
-              </div>
-            </Link>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+          <Tile hero to="/c/all" slug="all" label="All recipes" count={recipes.length} />
+          {sortedCategories.map((c) => (
+            <Tile key={c.slug} to={`/c/${c.slug}`} slug={c.slug} label={c.label} count={counts.get(c.slug)!} />
           ))}
         </div>
       )}

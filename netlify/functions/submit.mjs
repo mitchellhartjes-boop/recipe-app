@@ -14,8 +14,8 @@
 // defaults scope the row correctly (same mechanism as worker/index.mjs).
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { extractReel, extractWebPage } from './_lib/extract.mjs'
-import { rehostImage } from './_lib/images.mjs'
+import { extractReel, extractWebPage, extractRecipeFromImage } from './_lib/extract.mjs'
+import { coverImage } from './_lib/images.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -99,9 +99,30 @@ function toRecord(r, { url, sourcePlatform, sourceKind, imageUrl, model }) {
       model: model ?? null,
       confidence: r.confidence ?? null,
       via: 'ios_shortcut',
+      photo_query: r.photo_query ?? null,
       notes: r.notes ?? r.notes_for_user ?? null,
     },
   }
+}
+
+// Pull a base64 image + media type out of the request body, accepting the shapes
+// an iOS Shortcut can send: a data: URL, a bare base64 string, or {image, type}.
+function getImage(body, urlObj) {
+  let raw = null
+  let type = 'image/jpeg'
+  if (body && typeof body === 'object') {
+    raw = body.image ?? body.photo ?? body.image_base64 ?? body.file ?? null
+    if (typeof body.type === 'string') type = body.type
+    if (typeof body.media_type === 'string') type = body.media_type
+  }
+  if (!raw && urlObj.searchParams.get('image')) raw = urlObj.searchParams.get('image')
+  if (!raw || typeof raw !== 'string') return null
+  const m = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.*)$/is)
+  if (m) return { base64: m[2].replace(/\s/g, ''), mediaType: m[1].toLowerCase() }
+  const cleaned = raw.replace(/\s/g, '')
+  // Heuristic: real base64 image payloads are large; ignore tiny/garbage strings.
+  if (cleaned.length < 100 || /[^A-Za-z0-9+/=]/.test(cleaned.slice(0, 64))) return null
+  return { base64: cleaned, mediaType: type.toLowerCase() }
 }
 
 export default async (req) => {
@@ -138,6 +159,34 @@ export default async (req) => {
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return json({ ok: false, message: 'Server is missing ANTHROPIC_API_KEY' }, 500)
+
+  // --- screenshot / photo path (no URL) ---
+  // The way to capture audience-restricted or age-gated reels (e.g. cocktails):
+  // the user screenshots what they can already see and shares the image. Claude
+  // vision reads the recipe; the screenshot is NOT used as the cover (it's full
+  // of app chrome) — we fetch a clean stock photo from photo_query instead.
+  const img = getImage(body, urlObj)
+  if (img) {
+    try {
+      const supabase = await signedInClient()
+      const { recipe: r, model } = await extractRecipeFromImage({ base64: img.base64, mediaType: img.mediaType, apiKey })
+      if (!r.found) {
+        return json({
+          ok: false,
+          status: 'no_recipe',
+          kind: 'image',
+          message: r.notes_for_user || "Couldn't find a recipe in that screenshot. Make sure the ingredients and steps are visible.",
+        })
+      }
+      const cover = await coverImage(supabase, { srcUrl: null, photoQuery: r.photo_query, keyHint: r.title || 'recipe' })
+      const record = toRecord(r, { url: null, sourcePlatform: 'instagram', sourceKind: 'screenshot', imageUrl: cover, model })
+      const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+      if (error) throw error
+      return json({ ok: true, status: 'saved', kind: 'screenshot', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” from your screenshot.` })
+    } catch (e) {
+      return json({ ok: false, message: e?.message || 'Could not read the screenshot.' }, 502)
+    }
+  }
 
   // --- resolve the shared URL ---
   const rawInput =
@@ -181,8 +230,8 @@ export default async (req) => {
         if (r.external_url) {
           const web = await extractWebPage({ url: r.external_url, apiKey })
           if (web.recipe.found) {
-            const cover = await rehostImage(supabase, web.imageUrl, web.recipe.title || r.title || 'recipe')
-            const record = toRecord(web.recipe, { url: r.external_url, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover || web.imageUrl, model: web.model })
+            const cover = await coverImage(supabase, { srcUrl: web.imageUrl, photoQuery: web.recipe.photo_query, keyHint: web.recipe.title || r.title || 'recipe' })
+            const record = toRecord(web.recipe, { url: r.external_url, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
             const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
             if (error) throw error
             return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
@@ -205,8 +254,8 @@ export default async (req) => {
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.) — fast path, save directly.
     const res = await extractWebPage({ url: link, apiKey })
     if (res.recipe.found) {
-      const cover = await rehostImage(supabase, res.imageUrl, res.recipe.title || 'recipe')
-      const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover || res.imageUrl, model: res.model })
+      const cover = await coverImage(supabase, { srcUrl: res.imageUrl, photoQuery: res.recipe.photo_query, keyHint: res.recipe.title || 'recipe' })
+      const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
       const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })

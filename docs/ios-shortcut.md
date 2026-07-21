@@ -58,6 +58,44 @@ That’s it — this hand-built path is the reliable one.
     **local** worker runs (`$env:WORKER_KINDS='video'; node worker/index.mjs` — Instagram blocks
     video downloads from datacenter IPs, so video is local-only for now).
 
+## Second Shortcut — "Add to Dilla from Screenshot" (for restricted / cocktail reels)
+
+Some reels can't be read by any link-based method — **audience-restricted** reels, and
+**age-gated alcohol/cocktail** reels (Instagram hides these from anonymous fetchers, so the link
+path returns "can't read, it's restricted"). The fix: **screenshot what you can already see** and
+share the image. Claude vision reads the recipe off the screenshot. (The screenshot is NOT used as
+the cover — it's full of app chrome — a clean stock photo is fetched from the dish name instead.)
+
+This is a **separate** shortcut because it takes an **image**, not a link.
+
+1. Shortcuts app → **+** → rename it `Add to Dilla from Screenshot`.
+2. **Details** (ⓘ) → **Show in Share Sheet** ON. Under **Share Sheet Types**, enable **Images**
+   only (turn the rest off).
+3. Add action **Convert Image** (search "Convert Image"):
+   - Convert **Shortcut Input** to **JPEG** (this avoids iPhone HEIC photos, which vision can't read;
+     screenshots are fine too). Leave quality default.
+4. Add action **Base64 Encode**:
+   - Input: the **Converted Image** from step 3. (Tap **Show More** → **Line Breaks: None**.)
+5. Add action **Text**, set its content to exactly (no spaces):
+   `data:image/jpeg;base64,` immediately followed by the **Base64 Encoded** variable from step 4.
+   - (i.e. the text is the prefix `data:image/jpeg;base64,` + the encoded variable glued on the end)
+6. Add action **Get Contents of URL**:
+   - **URL:** `https://recipe-vault-mh.netlify.app/.netlify/functions/submit`
+   - **Show More** → **Method:** `POST`
+   - **Headers:** add → Key `Authorization`, Value `Bearer <YOUR_SHORTCUT_TOKEN>` (same token as the
+     first shortcut).
+   - **Request Body:** `JSON` → **Add new field** → type **Text** → Key: `image`, Value: the **Text**
+     variable from step 5.
+7. Add action **Get Dictionary Value** → Value for key `message` in **Contents of URL**.
+8. Add action **Show Notification** → text = the **Dictionary Value** from step 7. **Done.**
+
+**Use it:** hit a cocktail/restricted reel → screenshot it (make sure the ingredients + steps are
+on screen; scroll the caption into one shot, or take two and add the second by hand) → **Share** →
+**Add to Dilla from Screenshot**. You'll get *"Saved "…" from your screenshot."*
+
+> Tip: if a recipe is long, the screenshot only needs the **ingredients and steps** legible. Vision
+> reads on-screen text and the visible caption; it ignores the status bar, like/comment buttons, etc.
+
 ## Make the app feel native (optional)
 
 Open https://recipe-vault-mh.netlify.app in **Safari** → **Share** → **Add to Home Screen**.
