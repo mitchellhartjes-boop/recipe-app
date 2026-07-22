@@ -92,16 +92,15 @@ workflows:
               --certificate-key=@file:/tmp/cert_key
           done
 
+          # Profiles land in Xcode's UserData directory, not the old
+          # ~/Library/MobileDevice path — globbing the wrong one printed nothing.
           echo "--- capabilities in the fetched profiles ---"
-          for p in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+          for p in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision; do
             [ -f "$p" ] || continue
-            NAME=$(security cms -D -i "$p" 2>/dev/null | plutil -extract Name raw - 2>/dev/null)
-            HAS_GROUPS=$(security cms -D -i "$p" 2>/dev/null | grep -c "application-groups" || true)
+            DECODED=$(security cms -D -i "$p" 2>/dev/null)
+            NAME=$(printf '%s' "$DECODED" | plutil -extract Name raw - 2>/dev/null)
+            HAS_GROUPS=$(printf '%s' "$DECODED" | grep -c "application-groups" || true)
             echo "  $NAME | app-groups entitlement present: $HAS_GROUPS"
-            if [ "$HAS_GROUPS" = "0" ]; then
-              echo "    ^ STALE: this profile predates the App Groups capability."
-              echo "      Delete it at developer.apple.com > Profiles and re-run."
-            fi
           done
 
           keychain add-certificates
@@ -114,12 +113,14 @@ workflows:
           # needs. Without that mapping the export cannot tell which profile
           # belongs to the app vs the extension, and fails claiming the profile
           # lacks a capability it actually has.
-          xcode-project use-profiles --export-options-path /tmp/ExportOptions.plist
+          # No flag here on purpose: `use-profiles` writes its export options to
+          # ~/export_options.plist by default, and that file carries the
+          # bundle-id -> profile mapping the export step needs. Passing an
+          # explicit path means guessing the flag name; the default is documented.
+          xcode-project use-profiles
 
-          echo "--- provisioning profiles installed ---"
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "NONE — signing did not produce a profile"
           echo "--- generated export options (bundle id -> profile) ---"
-          cat /tmp/ExportOptions.plist 2>/dev/null || echo "NONE — use-profiles produced no export options"
+          cat "$HOME/export_options.plist" 2>/dev/null || echo "NONE — use-profiles produced no export options"
       - name: Set build number
         script: |
           cd ios/App
@@ -156,17 +157,18 @@ workflows:
           # for BOTH the app and the extension. Hand-writing this plist was the
           # bug: without the mapping, exportArchive can't match a profile to a
           # bundle id and reports the profile as missing a capability it has.
-          if [ ! -f /tmp/ExportOptions.plist ]; then
-            echo "No export options plist — use-profiles did not run correctly."
+          EXPORT_OPTS="$HOME/export_options.plist"
+          if [ ! -f "$EXPORT_OPTS" ]; then
+            echo "No export options at $EXPORT_OPTS — use-profiles did not run correctly."
             exit 1
           fi
           echo "--- exporting with ---"
-          cat /tmp/ExportOptions.plist
+          cat "$EXPORT_OPTS"
 
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE" \
             -exportPath "$IPA_DIR" \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -exportOptionsPlist "$EXPORT_OPTS" \
             -allowProvisioningUpdates \
             2>&1 | tee /tmp/export.log | xcpretty --no-color || {
               echo ""
