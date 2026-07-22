@@ -121,12 +121,46 @@ workflows:
               exit 1
             }
 
-          xcode-project build-ipa \
-            --archive-path "$ARCHIVE" \
-            --ipa-directory "$CM_BUILD_DIR/ios/ipa"
+          # `xcode-project build-ipa` does not accept --archive-path, so export
+          # the already-succeeded archive with xcodebuild directly. The plist is
+          # written with printf (not an indented heredoc) so there is no leading
+          # whitespace to strip and nothing to get subtly wrong.
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0">' \
+            '<dict>' \
+            '  <key>method</key>' \
+            '  <string>app-store-connect</string>' \
+            '  <key>signingStyle</key>' \
+            '  <string>manual</string>' \
+            '  <key>uploadSymbols</key>' \
+            '  <true/>' \
+            '</dict>' \
+            '</plist>' > /tmp/ExportOptions.plist
+
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath "$CM_BUILD_DIR/ios/ipa" \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            2>&1 | tee /tmp/export.log | xcpretty --no-color || {
+              echo ""
+              echo "=================== EXPORT FAILED — real errors ==================="
+              grep -E "error:|Provisioning|entitlement|No profile|does not match" /tmp/export.log | head -30
+              echo "==================== last 40 lines of raw log ====================="
+              tail -40 /tmp/export.log
+              exit 1
+            }
     artifacts:
+      # The export step writes to $CM_BUILD_DIR/ios/ipa; the first pattern is
+      # Codemagic's conventional location. Both are listed so the TestFlight
+      # publish step finds the .ipa wherever it lands.
+      - ios/ipa/*.ipa
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - /tmp/archive.log
+      - /tmp/export.log
     publishing:
       app_store_connect:
         auth: integration
