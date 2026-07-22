@@ -106,7 +106,12 @@ workflows:
           # swallow the actual diagnostic, leaving only "Failed to archive".
           # Run xcodebuild directly first so the real error is in the log; if it
           # passes, hand the archive to build-ipa for packaging.
+          # Export into the repo working directory, NOT $CM_BUILD_DIR. The
+          # artifact patterns below are resolved relative to the clone root, so
+          # an absolute path there silently matches nothing — which makes the
+          # publish step "succeed" while uploading no IPA at all.
           ARCHIVE="$CM_BUILD_DIR/ios/xcarchive/App.xcarchive"
+          IPA_DIR="build/ios/ipa"
           xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" \
             -archivePath "$ARCHIVE" archive \
             COMPILER_INDEX_STORE_ENABLE=NO \
@@ -141,7 +146,7 @@ workflows:
 
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE" \
-            -exportPath "$CM_BUILD_DIR/ios/ipa" \
+            -exportPath "$IPA_DIR" \
             -exportOptionsPlist /tmp/ExportOptions.plist \
             -allowProvisioningUpdates \
             2>&1 | tee /tmp/export.log | xcpretty --no-color || {
@@ -152,13 +157,19 @@ workflows:
               tail -40 /tmp/export.log
               exit 1
             }
+
+          # Fail loudly if no IPA was produced. Without this the build goes green
+          # and TestFlight silently gets nothing — which is exactly what happened.
+          echo "--- exported files in $IPA_DIR ---"
+          ls -la "$IPA_DIR" || true
+          if ! ls "$IPA_DIR"/*.ipa >/dev/null 2>&1; then
+            echo "No .ipa produced in $IPA_DIR — nothing would be uploaded to TestFlight."
+            exit 1
+          fi
+          echo "IPA ready: $(ls "$IPA_DIR"/*.ipa)"
     artifacts:
-      # The export step writes to $CM_BUILD_DIR/ios/ipa; the first pattern is
-      # Codemagic's conventional location. Both are listed so the TestFlight
-      # publish step finds the .ipa wherever it lands.
-      - ios/ipa/*.ipa
+      # Relative to the clone root — must match IPA_DIR in the Build IPA step.
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
       - /tmp/archive.log
       - /tmp/export.log
     publishing:
