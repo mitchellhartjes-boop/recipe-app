@@ -45,9 +45,20 @@ for (const key of Object.keys(targets)) {
 // 'app_extension' gives the right product type + packaging (.appex).
 const ext = proj.addTarget(TARGET, 'app_extension', GROUP_DIR, EXT_BUNDLE)
 
-// Build phases. The extension has Swift to compile and a plist/entitlements to
-// carry; it needs no frameworks beyond the SDK.
-proj.addBuildPhase([], 'PBXSourcesBuildPhase', 'Sources', ext.uuid)
+// Build phases. The Swift file is passed INTO the Sources phase here rather
+// than added afterwards with addSourceFile(): an empty Sources phase compiles
+// nothing, producing a .appex whose executable has no architectures — which
+// App Store upload rejects with error 90085 ("Lipo failed to detect any
+// architectures"). The app still archives and exports fine, so this only
+// surfaces at the very last step.
+proj.addBuildPhase(
+  ['ShareViewController.swift'],
+  'PBXSourcesBuildPhase',
+  'Sources',
+  ext.uuid,
+  'app_extension',
+  GROUP_DIR,
+)
 proj.addBuildPhase([], 'PBXResourcesBuildPhase', 'Resources', ext.uuid)
 proj.addBuildPhase([], 'PBXFrameworksBuildPhase', 'Frameworks', ext.uuid)
 
@@ -71,7 +82,9 @@ for (const key of Object.keys(groups)) {
   }
 }
 
-proj.addSourceFile('ShareViewController.swift', { target: ext.uuid }, group.uuid)
+// (The Swift file is already attached to the Sources phase above — calling
+// addSourceFile here as well produced a duplicate PBXBuildFile entry without
+// ever landing in the phase's files array.)
 
 // --- build settings ---------------------------------------------------------
 // Set on BOTH Debug and Release for the extension target only.
@@ -130,6 +143,30 @@ if (!alreadyEmbedded) {
     appTargetKey,
     'app_extension',
   )
+}
+
+// --- sanity check: every target must actually compile something -------------
+// An extension target with an empty Sources phase still archives and exports
+// happily, then gets rejected by App Store upload with error 90085 ("No
+// architectures in the binary"). Fail here instead, where the cause is obvious.
+{
+  const srcPhases = proj.hash.project.objects.PBXSourcesBuildPhase || {}
+  const allTargets = proj.pbxNativeTargetSection()
+  for (const key of Object.keys(allTargets)) {
+    const t = allTargets[key]
+    if (!t || typeof t !== 'object' || !t.name) continue
+    for (const ph of t.buildPhases || []) {
+      const phase = srcPhases[ph.value]
+      if (!phase || typeof phase !== 'object') continue
+      if (!(phase.files || []).length) {
+        console.error(
+          `\n${unquote(t.name)} has an EMPTY Sources phase — the built binary would ` +
+            `have no architectures and App Store upload would reject it (90085).`,
+        )
+        process.exit(1)
+      }
+    }
+  }
 }
 
 writeFileSync(projPath, proj.writeSync())
