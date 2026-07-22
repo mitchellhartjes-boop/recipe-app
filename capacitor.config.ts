@@ -2,10 +2,14 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 // The native iOS shell around the Vite build (dist/).
 //
-// ⚠️ PLACEHOLDER BUNDLE ID. `com.mitchellhartjes.dilla` is a stand-in until the
-// App Store name is settled. Changing it later means a new App ID + provisioning
-// profile (and a second one for the share extension), so change it BEFORE the
-// first App Store Connect record exists — after that it is effectively permanent.
+// Name settled 2026-07-21: the App Store listing is "Dilla: Recipe Vault" (the
+// keyword half carries ASO — nobody finds a recipe app by searching its brand).
+// `appName` here is the SHORT home-screen name, which must stay under ~12 chars
+// or iOS truncates it under the icon.
+//
+// The bundle id is final. Changing it after the App Store Connect record exists
+// means a new App ID + provisioning profiles (two, once the share extension
+// lands), so it is effectively permanent from here.
 const config: CapacitorConfig = {
   appId: 'com.mitchellhartjes.dilla',
   appName: 'Dilla',

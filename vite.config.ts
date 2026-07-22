@@ -23,7 +23,9 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'robots.txt'],
             manifest: {
-              name: 'Dilla',
+              // `name` is the install prompt / listing name; `short_name` is what
+              // fits under the home-screen icon.
+              name: 'Dilla: Recipe Vault',
               short_name: 'Dilla',
               description: 'Dilla — your personal recipe vault. Every recipe you love, in one place.',
               theme_color: '#c2410c',
