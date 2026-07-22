@@ -102,9 +102,28 @@ workflows:
       - name: Build IPA
         script: |
           set -e
+          # `xcode-project build-ipa` summarises xcodebuild's output and can
+          # swallow the actual diagnostic, leaving only "Failed to archive".
+          # Run xcodebuild directly first so the real error is in the log; if it
+          # passes, hand the archive to build-ipa for packaging.
+          ARCHIVE="$CM_BUILD_DIR/ios/xcarchive/App.xcarchive"
+          xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" \
+            -archivePath "$ARCHIVE" archive \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_STYLE=Manual \
+            -allowProvisioningUpdates \
+            2>&1 | tee /tmp/archive.log | xcpretty --no-color || {
+              echo ""
+              echo "=================== ARCHIVE FAILED — real errors ==================="
+              grep -E "error:|warning: .*(entitl|provision|signing)|Provisioning|entitlement|No profile|does not match" /tmp/archive.log | head -40
+              echo "==================== last 60 lines of raw log ======================"
+              tail -60 /tmp/archive.log
+              exit 1
+            }
+
           xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --archive-path "$ARCHIVE" \
+            --ipa-directory "$CM_BUILD_DIR/ios/ipa"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
