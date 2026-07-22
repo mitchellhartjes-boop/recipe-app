@@ -110,10 +110,16 @@ workflows:
           # Capacitor template ships with DEVELOPMENT_TEAM empty and
           # CODE_SIGN_IDENTITY "iPhone Developer" (a *development* identity),
           # neither of which can archive for the App Store — this fixes both.
-          xcode-project use-profiles
+          # ...and writes the bundle-id -> profile mapping that -exportArchive
+          # needs. Without that mapping the export cannot tell which profile
+          # belongs to the app vs the extension, and fails claiming the profile
+          # lacks a capability it actually has.
+          xcode-project use-profiles --export-options-path /tmp/ExportOptions.plist
 
           echo "--- provisioning profiles installed ---"
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "NONE — signing did not produce a profile"
+          echo "--- generated export options (bundle id -> profile) ---"
+          cat /tmp/ExportOptions.plist 2>/dev/null || echo "NONE — use-profiles produced no export options"
       - name: Set build number
         script: |
           cd ios/App
@@ -145,23 +151,17 @@ workflows:
               exit 1
             }
 
-          # `xcode-project build-ipa` does not accept --archive-path, so export
-          # the already-succeeded archive with xcodebuild directly. The plist is
-          # written with printf (not an indented heredoc) so there is no leading
-          # whitespace to strip and nothing to get subtly wrong.
-          printf '%s\n' \
-            '<?xml version="1.0" encoding="UTF-8"?>' \
-            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-            '<plist version="1.0">' \
-            '<dict>' \
-            '  <key>method</key>' \
-            '  <string>app-store-connect</string>' \
-            '  <key>signingStyle</key>' \
-            '  <string>manual</string>' \
-            '  <key>uploadSymbols</key>' \
-            '  <true/>' \
-            '</dict>' \
-            '</plist>' > /tmp/ExportOptions.plist
+          # Export using the options plist that `use-profiles` generated in the
+          # signing step. It carries the bundle-id -> provisioning-profile map
+          # for BOTH the app and the extension. Hand-writing this plist was the
+          # bug: without the mapping, exportArchive can't match a profile to a
+          # bundle id and reports the profile as missing a capability it has.
+          if [ ! -f /tmp/ExportOptions.plist ]; then
+            echo "No export options plist — use-profiles did not run correctly."
+            exit 1
+          fi
+          echo "--- exporting with ---"
+          cat /tmp/ExportOptions.plist
 
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE" \
