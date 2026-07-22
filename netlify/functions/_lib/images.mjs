@@ -40,6 +40,30 @@ export async function rehostImage(supabase, srcUrl, keyHint = 'recipe') {
   }
 }
 
+// Find a representative stock photo from Pexels. Returns a direct image URL, or
+// null (no key, no match, any error). Never throws.
+//
+// NOTE: this is for CATEGORY TILE artwork only — decorative imagery for a
+// *group* of recipes, like "Italian" or "Tacos". It is deliberately NOT used
+// for recipe covers: attaching a stock photo of a similar-but-different dish to
+// a specific recipe reads as a photo of the thing you're about to cook, and
+// isn't. See coverImage() below.
+export async function findStockPhoto(query) {
+  const key = process.env.PEXELS_API_KEY
+  if (!key || !query || typeof query !== 'string') return null
+  try {
+    const url = `https://api.pexels.com/v1/search?per_page=1&orientation=landscape&query=${encodeURIComponent(query.trim())}`
+    const res = await fetch(url, { headers: { Authorization: key } })
+    if (!res.ok) return null
+    const data = await res.json()
+    const photo = data?.photos?.[0]
+    if (!photo) return null
+    return photo.src?.large || photo.src?.landscape || photo.src?.original || photo.src?.medium || null
+  } catch {
+    return null
+  }
+}
+
 // Resolve a permanent cover for a recipe: re-host the source image so the URL
 // never rots. Returns a permanent public URL, or null — in which case the app
 // shows its designed gradient + category-emoji card (see RecipeCover.tsx).

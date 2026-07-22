@@ -53,6 +53,10 @@ workflows:
           # `cap sync` can rewrite project.pbxproj, so the Share Extension
           # target is (re)applied after it. The script is idempotent.
           node scripts/add-share-extension.mjs
+          # Regenerate the native app icon. Capacitor ships a blue placeholder
+          # and restores it whenever ios/ is recreated; generating it here means
+          # the build can never ship the wrong icon regardless of repo state.
+          node scripts/gen-icons.mjs
       - name: Fetch signing files
         script: |
           # -e so a signing failure fails THIS step loudly. Without it the step

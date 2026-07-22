@@ -20,7 +20,7 @@ function Tile({
   label,
   count,
   emoji,
-  hasPhoto = true,
+  photoUrl,
   hero = false,
 }: {
   to: string
@@ -28,9 +28,12 @@ function Tile({
   label: string
   count: number
   emoji?: string
-  hasPhoto?: boolean
+  /** Built-ins resolve to their committed /categories/{slug}.jpg; custom
+   *  categories pass a fetched URL. Undefined means show the emoji card. */
+  photoUrl?: string
   hero?: boolean
 }) {
+  const hasPhoto = Boolean(photoUrl)
   const span = hero ? 'col-span-2 sm:col-span-3 lg:col-span-4' : ''
   const height = hero ? 'h-36 sm:h-48' : 'h-32 sm:h-40'
   const bg = TILE_BG[slug] ?? TILE_BG.default
@@ -43,7 +46,7 @@ function Tile({
           they get the gradient + a large emoji instead of a broken image. */}
       {hasPhoto ? (
         <img
-          src={`/categories/${slug}.jpg`}
+          src={photoUrl}
           alt=""
           loading="lazy"
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -166,7 +169,7 @@ export default function Library() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-          <Tile hero to="/c/all" slug="all" label="All recipes" count={recipes.length} />
+          <Tile hero to="/c/all" slug="all" label="All recipes" count={recipes.length} photoUrl="/categories/all.jpg" />
           {sortedCategories.map((c) => (
             <Tile
               key={c.slug}
@@ -175,7 +178,11 @@ export default function Library() {
               label={c.label}
               count={counts.get(c.slug) ?? 0}
               emoji={c.emoji}
-              hasPhoto={!c.slug.startsWith('custom-')}
+              photoUrl={
+                c.slug.startsWith('custom-')
+                  ? (c as { photoUrl?: string }).photoUrl
+                  : `/categories/${c.slug}.jpg`
+              }
             />
           ))}
           {/* Edit tile — same footprint as a category so the grid stays even */}

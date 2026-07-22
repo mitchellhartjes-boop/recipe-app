@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CATEGORIES, type Category } from './categories'
+import { apiUrl } from './api'
 
 const KEY = 'dilla-category-prefs'
 
@@ -14,6 +15,10 @@ export type CustomCategory = {
   emoji: string
   keywords: string[]
   custom: true
+  /** Re-hosted Pexels photo for the tile, so custom categories look like the
+   *  built-ins rather than falling back to an emoji card. Fetched in the
+   *  background when the category is created; undefined until it arrives. */
+  photoUrl?: string
 }
 
 type Prefs = {
@@ -112,6 +117,24 @@ export function useCategoryPrefs() {
       }
       return { custom: [...p.custom, cat], visible: [...p.visible, cat.slug] }
     })
+
+    // Fetch tile artwork in the background so a custom category looks like the
+    // built-ins. The tile shows its emoji card until this lands, and stays on
+    // the emoji card forever if it fails — decorative, never blocking.
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl(`/.netlify/functions/category-photo?label=${encodeURIComponent(cat.label)}`))
+        const body = (await res.json()) as { url?: string | null }
+        if (!body?.url) return
+        setPrefs((p) => ({
+          ...p,
+          custom: p.custom.map((c) => (c.slug === cat.slug ? { ...c, photoUrl: body.url as string } : c)),
+        }))
+      } catch {
+        /* keep the emoji card */
+      }
+    })()
+
     return cat
   }, [])
 

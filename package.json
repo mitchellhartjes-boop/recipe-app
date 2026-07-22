@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:native": "tsc -b && node scripts/build-native.mjs",
-    "sync:ios": "npm run build:native && npx cap sync ios && node scripts/add-share-extension.mjs",
+    "sync:ios": "npm run build:native && npx cap sync ios && node scripts/add-share-extension.mjs && node scripts/gen-icons.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
