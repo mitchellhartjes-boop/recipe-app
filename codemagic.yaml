@@ -50,23 +50,51 @@ workflows:
         script: npx cap sync ios
       - name: Fetch signing files
         script: |
+          # -e so a signing failure fails THIS step loudly. Without it the step
+          # "succeeds" in ~1s and the build dies much later at archive with the
+          # confusing "requires a provisioning profile" error.
+          set -e
           keychain initialize
+
+          if [ -z "$CERT_KEY_B64" ]; then
+            echo "CERT_KEY_B64 is empty — add it to the 'dilla' environment group."
+            echo "Generate with:"
+            echo "  openssl genrsa -out ios_distribution_key.pem 2048"
+            echo "  openssl base64 -A -in ios_distribution_key.pem   # -A = ONE line"
+            exit 1
+          fi
+
           # base64 survives any paste; a multiline PEM in an env var does not.
           echo "$CERT_KEY_B64" | base64 --decode > /tmp/cert_key
+          head -c 32 /tmp/cert_key | grep -q "BEGIN" || {
+            echo "Decoded CERT_KEY_B64 is not a PEM key — re-copy it as a single line (openssl base64 -A)."
+            exit 1
+          }
+
           # NOTE: when the Share Extension lands it is a SECOND bundle id and
           # needs its own profile — loop over both ids here at that point:
           #   for ID in "$BUNDLE_ID" "$BUNDLE_ID.ShareExtension"; do ... done
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE --create \
             --certificate-key=@file:/tmp/cert_key
+
           keychain add-certificates
+
+          # Writes the fetched profile + team into the Xcode project. The
+          # Capacitor template ships with DEVELOPMENT_TEAM empty and
+          # CODE_SIGN_IDENTITY "iPhone Developer" (a *development* identity),
+          # neither of which can archive for the App Store — this fixes both.
           xcode-project use-profiles
+
+          echo "--- provisioning profiles installed ---"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "NONE — signing did not produce a profile"
       - name: Set build number
         script: |
           cd ios/App
           agvtool new-version -all $BUILD_NUMBER
       - name: Build IPA
         script: |
+          set -e
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
