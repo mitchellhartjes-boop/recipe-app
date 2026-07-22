@@ -47,7 +47,12 @@ workflows:
       - name: Build the web app for native
         script: npm run build:native
       - name: Sync Capacitor iOS
-        script: npx cap sync ios
+        script: |
+          set -e
+          npx cap sync ios
+          # `cap sync` can rewrite project.pbxproj, so the Share Extension
+          # target is (re)applied after it. The script is idempotent.
+          node scripts/add-share-extension.mjs
       - name: Fetch signing files
         script: |
           # -e so a signing failure fails THIS step loudly. Without it the step
@@ -71,12 +76,14 @@ workflows:
             exit 1
           }
 
-          # NOTE: when the Share Extension lands it is a SECOND bundle id and
-          # needs its own profile — loop over both ids here at that point:
-          #   for ID in "$BUNDLE_ID" "$BUNDLE_ID.ShareExtension"; do ... done
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE --create \
-            --certificate-key=@file:/tmp/cert_key
+          # The Share Extension is a SECOND app id and needs its own profile.
+          # Both must be registered in the Apple Developer account first.
+          for ID in "$BUNDLE_ID" "$BUNDLE_ID.ShareExtension"; do
+            echo "--- fetching signing files for $ID"
+            app-store-connect fetch-signing-files "$ID" \
+              --type IOS_APP_STORE --create \
+              --certificate-key=@file:/tmp/cert_key
+          done
 
           keychain add-certificates
 
