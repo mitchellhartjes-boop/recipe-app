@@ -86,6 +86,18 @@ export default function ReviewRecipe() {
         .select('id')
         .single()
       if (dbError) throw dbError
+
+      // Instagram's caption embed doesn't expose a usable cover image, so a
+      // reel saved through this screen has no photo. Queue the same background
+      // 'cover' job the iOS Shortcut path uses: the worker pulls the reel's
+      // clean cover via Apify and fills it in within a minute or two.
+      // Best-effort — a missing photo must never block the save.
+      if (!initial!.image_url && initial!.source_url && /instagram\.com/i.test(initial!.source_url)) {
+        void supabase
+          .from('recipe_jobs')
+          .insert({ url: initial!.source_url, kind: 'cover', meta: { recipe_id: data.id } })
+      }
+
       navigate(`/recipe/${data.id}`, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the recipe.')

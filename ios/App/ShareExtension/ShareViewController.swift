@@ -140,42 +140,40 @@ class ShareViewController: UIViewController {
         defaults.synchronize()
     }
 
-    /// Wake the host app. An extension can't call UIApplication.shared.open, so
-    /// this walks the responder chain to find something that can.
+    /// Dismiss this extension, THEN wake the host app.
     ///
-    /// Ordering matters: completeRequest() must come AFTER the open call has
-    /// been dispatched, and the host app is opened via openURL:options:
-    /// completionHandler so we finish only once iOS has taken the request.
-    /// Calling finish() synchronously right after open() tore the extension
-    /// down mid-handoff, which left the *sharing* app (Instagram) waiting on an
-    /// extension context that never completed — it appeared frozen.
+    /// Order is the whole trick. An extension must call completeRequest() to
+    /// hand control back to the app that presented it (Instagram); if it does
+    /// not, that app sits waiting on a live extension context and looks frozen.
+    ///
+    /// The previous version opened the URL first and completed afterwards. On
+    /// modern iOS there is no UIApplication in an extension's responder chain,
+    /// so it took the openURL: fallback and then called finish() while iOS was
+    /// mid app-switch — the completion never landed cleanly and Instagram hung.
+    ///
+    /// So: complete first, and open from completeRequest's completion handler,
+    /// once this extension is actually gone.
     private func openHostApp() {
         guard let url = URL(string: "\(urlScheme)://\(urlHost)") else { return finish() }
 
+        extensionContext?.completeRequest(returningItems: []) { [weak self] _ in
+            self?.open(url)
+        }
+    }
+
+    /// Open a URL from inside an extension. UIApplication is not reachable
+    /// here on current iOS, so this walks the responder chain for anything
+    /// that implements openURL:.
+    private func open(_ url: URL) {
+        let selector = NSSelectorFromString("openURL:")
         var responder: UIResponder? = self
         while let r = responder {
-            if let app = r as? UIApplication {
-                app.open(url, options: [:]) { [weak self] _ in
-                    self?.finish()
-                }
+            if r.responds(to: selector) {
+                _ = r.perform(selector, with: url)
                 return
             }
             responder = r.next
         }
-
-        // No UIApplication in the chain (possible on newer iOS): fall back to
-        // the private-but-standard selector, then always complete the request
-        // so the host app is never left hanging.
-        let selector = NSSelectorFromString("openURL:")
-        var target: UIResponder? = self
-        while let t = target {
-            if t.responds(to: selector) {
-                t.perform(selector, with: url)
-                break
-            }
-            target = t.next
-        }
-        finish()
     }
 
     private func finish() {
