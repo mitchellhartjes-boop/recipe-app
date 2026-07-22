@@ -19,37 +19,56 @@ function Tile({
   slug,
   label,
   count,
+  emoji,
+  hasPhoto = true,
   hero = false,
 }: {
   to: string
   slug: string
   label: string
   count: number
+  emoji?: string
+  hasPhoto?: boolean
   hero?: boolean
 }) {
   const span = hero ? 'col-span-2 sm:col-span-3 lg:col-span-4' : ''
   const height = hero ? 'h-36 sm:h-48' : 'h-32 sm:h-40'
-  const bg = TILE_BG[slug] ?? TILE_BG.bread
+  const bg = TILE_BG[slug] ?? TILE_BG.default
   return (
     <Link
       to={to}
       className={`group relative overflow-hidden rounded-2xl shadow-card transition active:scale-[0.98] ${bg} ${span} ${height}`}
     >
-      {/* Real food photo (committed static asset), gently zooms on hover. The
-          gradient bg shows behind it while it loads / if it ever 404s. */}
-      <img
-        src={`/categories/${slug}.jpg`}
-        alt=""
-        loading="lazy"
-        className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-      />
+      {/* Built-ins have a committed photo. User-created categories don't, so
+          they get the gradient + a large emoji instead of a broken image. */}
+      {hasPhoto ? (
+        <img
+          src={`/categories/${slug}.jpg`}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 bottom-10 flex select-none items-center justify-center text-5xl opacity-80 transition-transform duration-300 group-hover:scale-110"
+          aria-hidden="true"
+        >
+          {emoji ?? '🍽️'}
+        </span>
+      )}
       {/* Dark scrim so the label stays readable on any photo */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/5" />
+      {/* Scrim only over a photo; on the light gradient tiles it would just
+          muddy the colour, and dark text reads better there. */}
+      {hasPhoto && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/5" />}
       <div className="absolute inset-x-0 bottom-0 p-3.5">
-        <h3 className={`font-display font-semibold leading-tight text-white ${hero ? 'text-2xl' : 'text-lg'}`}>
+        <h3
+          className={`font-display font-semibold leading-tight ${hero ? 'text-2xl' : 'text-lg'} ${
+            hasPhoto ? 'text-white' : 'text-ink'
+          }`}
+        >
           {label}
         </h3>
-        <p className="mt-0.5 text-xs text-white/85">
+        <p className={`mt-0.5 text-xs ${hasPhoto ? 'text-white/85' : 'text-stone-600'}`}>
           {count} {count === 1 ? 'recipe' : 'recipes'}
         </p>
       </div>
@@ -149,7 +168,15 @@ export default function Library() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           <Tile hero to="/c/all" slug="all" label="All recipes" count={recipes.length} />
           {sortedCategories.map((c) => (
-            <Tile key={c.slug} to={`/c/${c.slug}`} slug={c.slug} label={c.label} count={counts.get(c.slug) ?? 0} />
+            <Tile
+              key={c.slug}
+              to={`/c/${c.slug}`}
+              slug={c.slug}
+              label={c.label}
+              count={counts.get(c.slug) ?? 0}
+              emoji={c.emoji}
+              hasPhoto={!c.slug.startsWith('custom-')}
+            />
           ))}
           {/* Edit tile — same footprint as a category so the grid stays even */}
           <button

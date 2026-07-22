@@ -43,21 +43,40 @@ function save(p: Prefs) {
   }
 }
 
-// Turn a user-typed name into a category that the existing keyword matcher can
-// use. The label itself becomes the keyword, which is what a user intuitively
-// expects: a "Tacos" category matches recipes with "taco" in the title or tags.
+// Known cuisines and food groups get their dish vocabulary, so a category named
+// "Italian" finds carbonara and lasagna — not just recipes containing the
+// literal word "italian". Anything not listed still works; it just matches on
+// its own name (a "Tacos" category finds taco recipes), which is what a user
+// intuitively expects.
+const LEXICON: Record<string, string[]> = {
+  italian: ['italian', 'pasta', 'spaghetti', 'lasagna', 'lasagne', 'carbonara', 'bolognese', 'risotto', 'gnocchi', 'pesto', 'parmesan', 'parmigiana', 'marinara', 'bruschetta', 'focaccia', 'caprese', 'cacio e pepe', 'ravioli', 'tiramisu', 'piccata', 'alfredo', 'calzone', 'pizza'],
+  greek: ['greek', 'gyro', 'souvlaki', 'tzatziki', 'feta', 'moussaka', 'spanakopita', 'baklava', 'halloumi', 'orzo'],
+  french: ['french', 'ratatouille', 'coq au vin', 'quiche', 'crepe', 'baguette', 'bourguignon', 'croissant', 'gratin', 'souffle', 'beurre blanc'],
+  indian: ['indian', 'curry', 'tikka', 'masala', 'naan', 'biryani', 'tandoori', 'dal', 'paneer', 'samosa', 'korma', 'vindaloo', 'chutney', 'raita'],
+  thai: ['thai', 'pad thai', 'tom yum', 'satay', 'larb', 'massaman', 'lemongrass'],
+  chinese: ['chinese', 'stir fry', 'stir-fry', 'fried rice', 'lo mein', 'chow mein', 'dumpling', 'wonton', 'bao', 'szechuan', 'kung pao', 'hoisin', 'dim sum'],
+  japanese: ['japanese', 'sushi', 'ramen', 'teriyaki', 'tempura', 'miso', 'udon', 'soba', 'katsu', 'donburi', 'yakitori', 'edamame'],
+  korean: ['korean', 'kimchi', 'bibimbap', 'bulgogi', 'gochujang', 'japchae', 'tteokbokki'],
+  mediterranean: ['mediterranean', 'hummus', 'falafel', 'tahini', 'shawarma', 'tabbouleh', 'pita', 'couscous'],
+  bbq: ['bbq', 'barbecue', 'barbeque', 'brisket', 'smoked', 'ribs', 'pulled pork', 'grilled', 'smoker'],
+  dessert: ['dessert', 'cake', 'cookie', 'brownie', 'pie', 'ice cream', 'cheesecake', 'pudding', 'tart', 'frosting', 'cupcake'],
+  vegetarian: ['vegetarian', 'veggie', 'meatless', 'tofu', 'tempeh', 'plant based', 'plant-based'],
+  vegan: ['vegan', 'plant based', 'plant-based', 'tofu', 'tempeh'],
+  pork: ['pork', 'bacon', 'ham', 'sausage', 'prosciutto', 'chorizo', 'pancetta', 'pork belly', 'carnitas'],
+  snacks: ['snack', 'dip', 'appetizer', 'finger food', 'chips', 'popcorn'],
+  sides: ['side', 'side dish', 'mashed potatoes', 'roasted vegetables', 'coleslaw', 'stuffing'],
+}
+
+// Turn a user-typed name into a category the keyword matcher can use.
 export function makeCustomCategory(label: string, emoji: string): CustomCategory {
   const clean = label.trim()
-  const slug =
-    'custom-' +
-    clean
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+  const lower = clean.toLowerCase()
+  const slug = 'custom-' + lower.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   // Singularize a trailing "s" so "Tacos" also matches "taco" (the matcher
   // already handles the plural direction on its own).
-  const singular = clean.toLowerCase().replace(/s$/, '')
-  const keywords = Array.from(new Set([clean.toLowerCase(), singular].filter(Boolean)))
+  const singular = lower.replace(/s$/, '')
+  const known = LEXICON[lower] ?? LEXICON[singular] ?? []
+  const keywords = Array.from(new Set([lower, singular, ...known].filter(Boolean)))
   return { slug, label: clean, emoji: emoji || '🍽️', keywords, custom: true }
 }
 

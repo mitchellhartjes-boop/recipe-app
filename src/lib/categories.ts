@@ -158,9 +158,21 @@ function compile(kw: string): RegExp | string {
   return new RegExp(`\\b${escaped}(s|es)?\\b`, 'i')
 }
 
+// Compiled keyword matchers, cached by slug. Seeded with the built-ins and
+// filled lazily for anything else — user-created categories don't exist at
+// module load, and keying only off the built-ins meant a custom category
+// silently matched NOTHING (recipeInCategory bailed on the missing entry).
 const COMPILED = new Map<string, (RegExp | string)[]>(
   CATEGORIES.map((c) => [c.slug, c.keywords.map(compile)]),
 )
+
+function matchersFor(category: Category): (RegExp | string)[] {
+  const cached = COMPILED.get(category.slug)
+  if (cached) return cached
+  const built = (category.keywords ?? []).map(compile)
+  COMPILED.set(category.slug, built)
+  return built
+}
 
 function hit(text: string, matchers: (RegExp | string)[]): boolean {
   for (const m of matchers) {
@@ -174,8 +186,8 @@ function hit(text: string, matchers: (RegExp | string)[]): boolean {
 }
 
 export function recipeInCategory(recipe: Recipe, category: Category): boolean {
-  const matchers = COMPILED.get(category.slug)
-  if (!matchers) return false
+  const matchers = matchersFor(category)
+  if (!matchers.length) return false
   const base = `${recipe.title ?? ''} ${(recipe.tags ?? []).join(' ')}`.toLowerCase()
   if (hit(base, matchers)) return true
   if (category.scanIngredients && recipe.ingredients?.length) {
