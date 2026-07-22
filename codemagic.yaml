@@ -77,12 +77,31 @@ workflows:
           }
 
           # The Share Extension is a SECOND app id and needs its own profile.
-          # Both must be registered in the Apple Developer account first.
+          # Both must be registered in the Apple Developer account first, and
+          # BOTH need the App Groups capability enabled on the App ID.
+          #
+          # --profile-type is fetched fresh each build. If a profile was created
+          # BEFORE a capability (e.g. App Groups) was added to the App ID, Apple
+          # keeps serving that stale profile and the export then fails with
+          # 'requires a provisioning profile with the App Groups feature'.
+          # Deleting the old profiles in the portal forces a correct one.
           for ID in "$BUNDLE_ID" "$BUNDLE_ID.ShareExtension"; do
             echo "--- fetching signing files for $ID"
             app-store-connect fetch-signing-files "$ID" \
               --type IOS_APP_STORE --create \
               --certificate-key=@file:/tmp/cert_key
+          done
+
+          echo "--- capabilities in the fetched profiles ---"
+          for p in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            [ -f "$p" ] || continue
+            NAME=$(security cms -D -i "$p" 2>/dev/null | plutil -extract Name raw - 2>/dev/null)
+            HAS_GROUPS=$(security cms -D -i "$p" 2>/dev/null | grep -c "application-groups" || true)
+            echo "  $NAME | app-groups entitlement present: $HAS_GROUPS"
+            if [ "$HAS_GROUPS" = "0" ]; then
+              echo "    ^ STALE: this profile predates the App Groups capability."
+              echo "      Delete it at developer.apple.com > Profiles and re-run."
+            fi
           done
 
           keychain add-certificates
