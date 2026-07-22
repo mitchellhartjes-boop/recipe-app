@@ -35,6 +35,22 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <CheckIcon className="h-8 w-8" />,
+    title: 'Can’t find Dilla when you share?',
+    body: (
+      <>
+        The first time, iOS hides new apps at the end of the share row.
+        <br />
+        <br />
+        Tap <b>Share</b> → scroll the app row to the end → tap <b>More</b>. Find <b>Dilla</b>, then
+        drag it to the top — or tap <b>Edit</b> and switch on <b>Favorite</b>.
+        <br />
+        <br />
+        After that Dilla sits right at the front, every time.
+      </>
+    ),
+  },
+  {
+    icon: <CheckIcon className="h-8 w-8" />,
     title: 'If a reel won’t import',
     body: (
       <>

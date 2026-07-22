@@ -18,7 +18,11 @@ class ShareViewController: UIViewController {
     // Must match the App Group capability on BOTH targets.
     private let appGroupId = "group.com.mitchellhartjes.dilla"
     // Must match CFBundleURLSchemes in the main app's Info.plist.
+    // The HOST must be "share": @capgo/capacitor-share-target only reacts to
+    // url.host == "share" (or path "/share"). "dilla://shared" opened the app
+    // but the plugin ignored it, so nothing was ever delivered.
     private let urlScheme = "dilla"
+    private let urlHost = "share"
     // Key the @capgo/capacitor-share-target plugin reads on the app side.
     private let defaultsKey = "share-target-data"
 
@@ -138,20 +142,45 @@ class ShareViewController: UIViewController {
 
     /// Wake the host app. An extension can't call UIApplication.shared.open, so
     /// this walks the responder chain to find something that can.
+    ///
+    /// Ordering matters: completeRequest() must come AFTER the open call has
+    /// been dispatched, and the host app is opened via openURL:options:
+    /// completionHandler so we finish only once iOS has taken the request.
+    /// Calling finish() synchronously right after open() tore the extension
+    /// down mid-handoff, which left the *sharing* app (Instagram) waiting on an
+    /// extension context that never completed — it appeared frozen.
     private func openHostApp() {
-        guard let url = URL(string: "\(urlScheme)://shared") else { return finish() }
+        guard let url = URL(string: "\(urlScheme)://\(urlHost)") else { return finish() }
+
         var responder: UIResponder? = self
         while let r = responder {
             if let app = r as? UIApplication {
-                app.open(url, options: [:], completionHandler: nil)
-                break
+                app.open(url, options: [:]) { [weak self] _ in
+                    self?.finish()
+                }
+                return
             }
             responder = r.next
+        }
+
+        // No UIApplication in the chain (possible on newer iOS): fall back to
+        // the private-but-standard selector, then always complete the request
+        // so the host app is never left hanging.
+        let selector = NSSelectorFromString("openURL:")
+        var target: UIResponder? = self
+        while let t = target {
+            if t.responds(to: selector) {
+                t.perform(selector, with: url)
+                break
+            }
+            target = t.next
         }
         finish()
     }
 
     private func finish() {
+        // Always completes — an extension that never calls this leaves the
+        // sharing app spinning.
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 }

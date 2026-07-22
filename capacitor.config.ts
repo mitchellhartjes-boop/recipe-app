@@ -28,6 +28,13 @@ const config: CapacitorConfig = {
       backgroundColor: '#faf8f5',
       showSpinner: false,
     },
+    // MUST match the App Group on both targets and the appGroupId in
+    // ShareViewController.swift. Without this the plugin falls back to
+    // "group.YOUR_APP_GROUP_ID" and reads an empty container — the app opens
+    // from the share sheet and nothing ever arrives.
+    CapacitorShareTarget: {
+      appGroupId: 'group.com.mitchellhartjes.dilla',
+    },
   },
 }
 
