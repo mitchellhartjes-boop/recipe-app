@@ -1,184 +1,198 @@
 import UIKit
-import Social
+import UserNotifications
 import UniformTypeIdentifiers
-import MobileCoreServices
 
-// Dilla's iOS Share Extension.
+// Dilla's Share Extension — a fire-and-forget importer.
 //
-// This is what puts "Dilla" in Instagram/Pinterest/Safari's share sheet. It runs
-// as a SEPARATE PROCESS from the main app with a hard ~120 MB memory ceiling, so
-// it deliberately does as little as possible: read the shared item, copy it into
-// the shared App Group container, and hand off to the main app via a custom URL
-// scheme. All extraction happens in the app, not here.
+// Flow: read the shared link or image, POST it straight to Dilla's submit
+// endpoint (the same one the iOS Shortcut used, which saves directly and
+// queues a background cover-image job), announce the outcome with a local
+// notification, and dismiss. The user STAYS in Instagram throughout.
 //
-// Never render a WebView here — a Capacitor/RN UI in an extension has been
-// measured at ~92 MB before touching any media, which leaves no headroom.
+// This deliberately does NOT open the host app. Waking the host app from an
+// extension was the source of the frozen-Instagram bugs: whichever order you
+// call completeRequest() and openURL:, iOS is switching apps while the
+// extension tears down, and Instagram can be left waiting on a context that
+// never cleanly completed. No app switch — no freeze class at all.
 class ShareViewController: UIViewController {
 
-    // Must match the App Group capability on BOTH targets.
-    private let appGroupId = "group.com.mitchellhartjes.dilla"
-    // Must match CFBundleURLSchemes in the main app's Info.plist.
-    // The HOST must be "share": @capgo/capacitor-share-target only reacts to
-    // url.host == "share" (or path "/share"). "dilla://shared" opened the app
-    // but the plugin ignored it, so nothing was ever delivered.
-    private let urlScheme = "dilla"
-    private let urlHost = "share"
-    // Key the @capgo/capacitor-share-target plugin reads on the app side.
-    private let defaultsKey = "share-target-data"
+    private let endpoint = URL(string: "https://recipe-vault-mh.netlify.app/.netlify/functions/submit")!
+
+    // Injected into this extension's Info.plist by CI (PlistBuddy) from the
+    // SHORTCUT_TOKEN env var — never committed to the (public) repo. Local
+    // checkouts have it empty, which is fine: builds only happen on CI.
+    private var token: String {
+        (Bundle.main.object(forInfoDictionaryKey: "DillaShortcutToken") as? String) ?? ""
+    }
+
+    private let card = UIView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let label = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        buildCard()
         handleShare()
     }
 
+    // MARK: - Minimal in-sheet UI (a small "Saving to Dilla…" card)
+
+    private func buildCard() {
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.25)
+
+        card.backgroundColor = .systemBackground
+        card.layer.cornerRadius = 16
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.15
+        card.layer.shadowRadius = 12
+        card.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(card)
+
+        spinner.startAnimating()
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(spinner)
+
+        label.text = "Saving to Dilla…"
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.textColor = .label
+        label.numberOfLines = 3
+        label.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            card.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            card.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+            spinner.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            spinner.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            label.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            label.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
+        ])
+    }
+
+    // MARK: - Share handling
+
     private func handleShare() {
-        guard
-            let item = extensionContext?.inputItems.first as? NSExtensionItem,
-            let attachments = item.attachments
-        else { return finish() }
-
-        var texts: [String] = []
-        var files: [[String: String]] = []
-        let group = DispatchGroup()
-
-        for provider in attachments {
-            // Order matters: check the most specific type first. A shared photo
-            // can also advertise itself as data, and a URL often also comes
-            // through as plain text — we want the richest interpretation.
-            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                group.enter()
-                loadFile(provider, type: UTType.movie.identifier) { entry in
-                    if let entry { files.append(entry) }
-                    group.leave()
-                }
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                group.enter()
-                loadFile(provider, type: UTType.image.identifier) { entry in
-                    if let entry { files.append(entry) }
-                    group.leave()
-                }
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                group.enter()
-                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
-                    if let url = data as? URL { texts.append(url.absoluteString) }
-                    group.leave()
-                }
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                group.enter()
-                provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { data, _ in
-                    if let s = data as? String { texts.append(s) }
-                    group.leave()
-                }
-            }
+        guard !token.isEmpty else {
+            finishWith(ok: false, message: "This build is missing its access token — reinstall from TestFlight.")
+            return
         }
 
-        group.notify(queue: .main) { [weak self] in
-            self?.persist(texts: texts, files: files)
-            self?.openHostApp()
+        let providers = (extensionContext?.inputItems as? [NSExtensionItem])?
+            .flatMap { $0.attachments ?? [] } ?? []
+
+        // Priority: image (screenshot flow) > URL > plain text > movie.
+        if let p = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) {
+            loadImage(p)
+            return
         }
-    }
-
-    /// Copy a shared file into the App Group container.
-    ///
-    /// Two documented traps here:
-    ///  1. The temp URL is transient — once the extension dies the file is gone,
-    ///     so it must be copied somewhere the app can read.
-    ///  2. The URL's extension can disagree with the file actually on disk, so
-    ///     the path is used only for the copy, never trusted for the type.
-    /// `loadFileRepresentation` streams to disk rather than loading into memory,
-    /// which is what keeps a 100 MB video under the extension's RAM ceiling.
-    private func loadFile(
-        _ provider: NSItemProvider,
-        type: String,
-        completion: @escaping ([String: String]?) -> Void
-    ) {
-        provider.loadFileRepresentation(forTypeIdentifier: type) { [weak self] url, _ in
-            guard
-                let self,
-                let url,
-                let container = FileManager.default.containerURL(
-                    forSecurityApplicationGroupIdentifier: self.appGroupId
-                )
-            else { return completion(nil) }
-
-            let inbox = container.appendingPathComponent("share-inbox", isDirectory: true)
-            try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
-
-            let ext = url.pathExtension.isEmpty ? "dat" : url.pathExtension
-            let dest = inbox.appendingPathComponent("\(UUID().uuidString).\(ext)")
-
-            do {
-                try? FileManager.default.removeItem(at: dest)
-                try FileManager.default.copyItem(at: url, to: dest)
-                completion([
-                    "uri": dest.absoluteString,
-                    "name": dest.lastPathComponent,
-                    "mimeType": self.mimeType(for: ext),
-                ])
-            } catch {
-                completion(nil)
-            }
+        if let p = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }) {
+            loadURL(p)
+            return
         }
-    }
-
-    private func mimeType(for ext: String) -> String {
-        if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
-            return mime
+        if let p = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) {
+            loadText(p)
+            return
         }
-        return "application/octet-stream"
-    }
-
-    /// Hand the payload to the main app through the shared UserDefaults suite.
-    private func persist(texts: [String], files: [[String: String]]) {
-        guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
-        let payload: [String: Any] = [
-            "title": "",
-            "texts": texts,
-            "files": files,
-        ]
-        defaults.set(payload, forKey: defaultsKey)
-        defaults.synchronize()
-    }
-
-    /// Dismiss this extension, THEN wake the host app.
-    ///
-    /// Order is the whole trick. An extension must call completeRequest() to
-    /// hand control back to the app that presented it (Instagram); if it does
-    /// not, that app sits waiting on a live extension context and looks frozen.
-    ///
-    /// The previous version opened the URL first and completed afterwards. On
-    /// modern iOS there is no UIApplication in an extension's responder chain,
-    /// so it took the openURL: fallback and then called finish() while iOS was
-    /// mid app-switch — the completion never landed cleanly and Instagram hung.
-    ///
-    /// So: complete first, and open from completeRequest's completion handler,
-    /// once this extension is actually gone.
-    private func openHostApp() {
-        guard let url = URL(string: "\(urlScheme)://\(urlHost)") else { return finish() }
-
-        extensionContext?.completeRequest(returningItems: []) { [weak self] _ in
-            self?.open(url)
+        if providers.contains(where: { $0.hasItemConformingToTypeIdentifier(UTType.movie.identifier) }) {
+            finishWith(ok: false, message: "Video files aren't supported yet — share the reel's link instead.")
+            return
         }
+        finishWith(ok: false, message: "Nothing to import from that share.")
     }
 
-    /// Open a URL from inside an extension. UIApplication is not reachable
-    /// here on current iOS, so this walks the responder chain for anything
-    /// that implements openURL:.
-    private func open(_ url: URL) {
-        let selector = NSSelectorFromString("openURL:")
-        var responder: UIResponder? = self
-        while let r = responder {
-            if r.responds(to: selector) {
-                _ = r.perform(selector, with: url)
+    private func loadImage(_ provider: NSItemProvider) {
+        provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, _ in
+            guard let self else { return }
+            guard let url, let data = try? Data(contentsOf: url) else {
+                DispatchQueue.main.async { self.finishWith(ok: false, message: "Couldn't read that image.") }
                 return
             }
-            responder = r.next
+            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "image/jpeg"
+            self.submit(["image": data.base64EncodedString(), "type": mime])
         }
     }
 
-    private func finish() {
-        // Always completes — an extension that never calls this leaves the
-        // sharing app spinning.
-        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    private func loadURL(_ provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            let link = (item as? URL)?.absoluteString ?? (item as? String)
+            if let link, !link.isEmpty {
+                self.submit(["url": link])
+            } else {
+                DispatchQueue.main.async { self.finishWith(ok: false, message: "Nothing to import from that share.") }
+            }
+        }
+    }
+
+    private func loadText(_ provider: NSItemProvider) {
+        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [weak self] item, _ in
+            guard let self else { return }
+            if let text = item as? String, !text.isEmpty {
+                // submit.mjs pulls the first http(s) URL out of shared text itself.
+                self.submit(["url": text])
+            } else {
+                DispatchQueue.main.async { self.finishWith(ok: false, message: "Nothing to import from that share.") }
+            }
+        }
+    }
+
+    // MARK: - Network
+
+    private func submit(_ body: [String: Any]) {
+        var req = URLRequest(url: endpoint)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if error != nil {
+                    self.finishWith(ok: false, message: "Couldn't reach Dilla — check your connection and try again.")
+                    return
+                }
+                var ok = false
+                var message = "Something went wrong — try again."
+                if let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    ok = (json["ok"] as? Bool) ?? false
+                    message = (json["message"] as? String) ?? message
+                }
+                self.finishWith(ok: ok, message: message)
+            }
+        }.resume()
+    }
+
+    // MARK: - Outcome
+
+    private func finishWith(ok: Bool, message: String) {
+        spinner.stopAnimating()
+        spinner.isHidden = true
+        label.text = (ok ? "✓ " : "") + message
+
+        // The notification is the durable feedback (the card lasts ~1.5s). It
+        // shows even though Instagram is frontmost, because the notification
+        // belongs to Dilla, not the foreground app. Requires the main app to
+        // have requested permission (done in AppDelegate on first launch).
+        let content = UNMutableNotificationContent()
+        content.title = ok ? "Saved to Dilla" : "Dilla couldn't save that"
+        content.body = message
+        content.sound = .default
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil),
+            withCompletionHandler: nil
+        )
+
+        // Dismiss AFTER the user has had a beat to read the card. No app
+        // switch happens here — completeRequest simply returns to Instagram.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        }
     }
 }

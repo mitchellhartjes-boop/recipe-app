@@ -25,6 +25,67 @@ if (!existsSync(projPath)) {
   process.exit(1)
 }
 
+// --- always-run patches (independent of whether the target exists) ----------
+// These files are regenerated from templates by `npx cap add ios`, so they are
+// re-ensured on EVERY run — putting them after the target-exists early-exit
+// meant a regenerated ios/ silently lost them.
+
+// 1. dilla:// URL scheme in the app Info.plist (deep links; harmless to keep).
+{
+  const appPlist = resolve(root, 'ios/App/App/Info.plist')
+  let plist = readFileSync(appPlist, 'utf8')
+  if (!plist.includes('CFBundleURLTypes')) {
+    plist = plist.replace(
+      /<\/dict>\s*<\/plist>\s*$/,
+      `	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>${APP_BUNDLE}</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dilla</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
+`,
+    )
+    writeFileSync(appPlist, plist)
+    console.log('Added dilla:// URL scheme to the app Info.plist.')
+  }
+}
+
+// 2. Notification permission request in AppDelegate. The Share Extension posts
+// a "Saved to Dilla" local notification while the user stays in Instagram —
+// but only the MAIN APP can request that permission, so it must be in the
+// app's launch path.
+{
+  const adPath = resolve(root, 'ios/App/App/AppDelegate.swift')
+  let ad = readFileSync(adPath, 'utf8')
+  if (!ad.includes('UNUserNotificationCenter')) {
+    ad = ad.replace('import UIKit', 'import UIKit\nimport UserNotifications')
+    const anchor = '// Override point for customization after application launch.'
+    const inject =
+      `${anchor}\n` +
+      `        // Ask for notification permission so the Share Extension can announce\n` +
+      `        // "Saved to Dilla" while the user stays in Instagram. Extensions cannot\n` +
+      `        // request this permission themselves — the main app must.\n` +
+      `        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }`
+    if (ad.includes(anchor)) {
+      ad = ad.replace(anchor, inject)
+    } else {
+      ad = ad.replace(
+        /didFinishLaunchingWithOptions[^{]*\{/,
+        (m) => `${m}\n        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }`,
+      )
+    }
+    writeFileSync(adPath, ad)
+    console.log('Added notification-permission request to AppDelegate.')
+  }
+}
+
 const proj = xcode.project(projPath)
 proj.parseSync()
 
@@ -171,32 +232,8 @@ if (!alreadyEmbedded) {
 
 writeFileSync(projPath, proj.writeSync())
 
-// --- main app Info.plist: the URL scheme the extension calls back on --------
-// `npx cap add ios` regenerates Info.plist from a template, so this is applied
-// here rather than hand-edited once — otherwise a rebuild of ios/ silently
-// drops it and shares stop opening the app.
-const appPlist = resolve(root, 'ios/App/App/Info.plist')
-let plist = readFileSync(appPlist, 'utf8')
-if (!plist.includes('CFBundleURLTypes')) {
-  plist = plist.replace(
-    /<\/dict>\s*<\/plist>\s*$/,
-    `	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>${APP_BUNDLE}</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>dilla</string>
-			</array>
-		</dict>
-	</array>
-</dict>
-</plist>
-`,
-  )
-  writeFileSync(appPlist, plist)
-  console.log('Added dilla:// URL scheme to the app Info.plist.')
-}
+// (URL-scheme and AppDelegate patches run in the always-run section at the top,
+// so they survive an ios/ regeneration even when this target-creation half
+// no-ops.)
 
 console.log(`Added ${TARGET} target (${EXT_BUNDLE}) and embedded it into App.`)

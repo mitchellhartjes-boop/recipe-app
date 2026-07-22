@@ -28,8 +28,9 @@ const SLIDES: Slide[] = [
         <b>Share</b> button, then choose <b>Dilla</b> from the share sheet.
         <br />
         <br />
-        Dilla reads the post and writes the recipe out properly — every ingredient with its amount,
-        every step in order.
+        You stay right where you are — Dilla saves it in the background and sends you a{' '}
+        <b>notification</b> when the recipe's in your library, written out properly with every
+        amount and step.
       </>
     ),
   },
