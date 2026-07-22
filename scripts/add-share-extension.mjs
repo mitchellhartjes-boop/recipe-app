@@ -108,15 +108,29 @@ if (appTargetKey) {
 }
 
 // --- embed the .appex into the app ------------------------------------------
-// Without this the extension builds but is never packaged, so it silently does
-// not appear in the share sheet.
-proj.addBuildPhase(
-  [`${TARGET}.appex`],
-  'PBXCopyFilesBuildPhase',
-  'Embed App Extensions',
-  appTargetKey,
-  'app_extension',
-)
+// NOTE: addTarget() ALREADY creates a "Copy Files" phase on the app target that
+// copies ShareExtension.appex into PlugIns (dstSubfolderSpec 13). Adding an
+// explicit "Embed App Extensions" phase here produced a SECOND copy of the same
+// file to the same destination, which xcodebuild rejects with the opaque
+// "error: Unexpected duplicate tasks". So we only add the phase if no copy
+// phase is already embedding the .appex.
+const copyPhases = proj.hash.project.objects.PBXCopyFilesBuildPhase || {}
+const alreadyEmbedded = Object.keys(copyPhases).some((k) => {
+  const phase = copyPhases[k]
+  if (!phase || typeof phase !== 'object') return false
+  if (String(phase.dstSubfolderSpec) !== '13') return false
+  return (phase.files || []).some((f) => String(f.comment ?? '').includes(`${TARGET}.appex`))
+})
+
+if (!alreadyEmbedded) {
+  proj.addBuildPhase(
+    [`${TARGET}.appex`],
+    'PBXCopyFilesBuildPhase',
+    'Embed App Extensions',
+    appTargetKey,
+    'app_extension',
+  )
+}
 
 writeFileSync(projPath, proj.writeSync())
 
