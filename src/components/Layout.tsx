@@ -7,7 +7,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-full flex-col">
       <TopBar />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-12">
+      <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-12">
         <div key={pathname} className="animate-page-in">
           <Outlet />
         </div>

@@ -36,3 +36,7 @@ tools/
 
 # Generated iOS Shortcut — contains the SHORTCUT_TOKEN secret, never commit
 *.shortcut
+
+# iOS signing keys — NEVER commit these
+*.pem
+ios_distribution_key*

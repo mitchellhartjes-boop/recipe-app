@@ -64,7 +64,7 @@ export default function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-stone-200/70 bg-cream/80 pt-safe-t backdrop-blur">
+    <header className="sticky top-0 z-20 w-full max-w-full border-b border-stone-200/70 bg-cream/80 pt-safe-t backdrop-blur">
       {/* Mobile bar — brand on home, contextual title + back elsewhere */}
       <div className="flex h-14 items-center px-4 sm:hidden">
         {isPrimary ? (

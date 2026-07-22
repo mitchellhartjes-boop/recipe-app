@@ -38,3 +38,24 @@ for (const [name, size] of targets) {
   await sharp(buf, { density: 384 }).resize(size, size).png().toFile(resolve(out, name))
   console.log('wrote', name)
 }
+
+// The native iOS app icon. Capacitor ships its own placeholder here and
+// `cap sync` does NOT overwrite it, so this must be written explicitly or the
+// App Store build carries the Capacitor logo. iOS requires 1024x1024 with NO
+// alpha channel — a transparent icon is rejected at upload.
+const iosIcon = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'ios',
+  'App',
+  'App',
+  'Assets.xcassets',
+  'AppIcon.appiconset',
+  'AppIcon-512@2x.png',
+)
+await sharp(buf, { density: 512 })
+  .resize(1024, 1024)
+  .flatten({ background: '#c2410c' }) // strip alpha — App Store rejects icons with it
+  .png()
+  .toFile(iosIcon)
+console.log('wrote ios AppIcon-512@2x.png (1024x1024, no alpha)')

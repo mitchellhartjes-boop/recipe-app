@@ -48,12 +48,30 @@
   body,
   #root {
     height: 100%;
+    /* Lock the document to the viewport width. In Safari an over-wide child is
+       mostly forgiven, but inside a WKWebView (Capacitor, contentInset:"never")
+       it widens the whole page — which then makes `position: fixed` elements
+       size to the WIDENED page instead of the screen. That is what made the
+       bottom nav run off the edge and the app scroll sideways. */
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-cream text-ink font-sans antialiased;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: none;
+    /* Belt and braces: never let the body itself become a scroll container
+       horizontally, and keep iOS from rubber-banding sideways. */
+    position: relative;
+    overscroll-behavior-x: none;
+  }
+
+  /* Long unbroken strings (recipe URLs, ingredient lines pasted from the web)
+     are the usual culprit for pushing a layout wide. Let them wrap. */
+  h1, h2, h3, p, li, span, a {
+    overflow-wrap: anywhere;
   }
 }
 

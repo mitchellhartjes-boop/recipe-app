@@ -1,7 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useRecipes } from '../lib/useRecipes'
-import { CATEGORIES, recipeInCategory, TILE_BG } from '../lib/categories'
+import { recipeInCategory, TILE_BG } from '../lib/categories'
+import { useCategoryPrefs } from '../lib/useCategoryPrefs'
+import CategoryEditor from '../components/CategoryEditor'
+import Onboarding from '../components/Onboarding'
+import { hasOnboarded } from '../lib/onboarding'
+import { PlusIcon } from '../components/icons'
 
 const KIND_LABEL: Record<string, string> = {
   link_in_bio: 'Recovering recipe from the blog',
@@ -56,27 +61,31 @@ export default function Library() {
   const location = useLocation()
   const queuedKind = (location.state as { queued?: string } | null)?.queued ?? null
   const { recipes, jobs, loading, dismissJob } = useRecipes()
+  const { visible, all, isVisible, toggle, addCustom, removeCustom } = useCategoryPrefs()
+  const [editing, setEditing] = useState(false)
+  const [onboarding, setOnboarding] = useState(() => !hasOnboarded())
 
-  // One pass over the recipes to compute each category's count.
+  // One pass over the recipes to count each VISIBLE category.
   const counts = useMemo(() => {
     const m = new Map<string, number>()
-    for (const c of CATEGORIES) m.set(c.slug, 0)
+    for (const c of visible) m.set(c.slug, 0)
     for (const r of recipes) {
-      for (const c of CATEGORIES) {
+      for (const c of visible) {
         if (recipeInCategory(r, c)) m.set(c.slug, m.get(c.slug)! + 1)
       }
     }
     return m
-  }, [recipes])
+  }, [recipes, visible])
 
-  // Categories sorted by recipe count (largest first); ties keep their declared
-  // order. Empty categories sink to the bottom but still show (ready to fill).
+  // Sorted by recipe count (largest first); ties keep the user's chosen order.
+  // Empty categories sink to the bottom but still show (ready to fill).
   const sortedCategories = useMemo(
     () =>
-      CATEGORIES.map((c, i) => ({ c, i }))
-        .sort((a, b) => counts.get(b.c.slug)! - counts.get(a.c.slug)! || a.i - b.i)
+      visible
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => (counts.get(b.c.slug) ?? 0) - (counts.get(a.c.slug) ?? 0) || a.i - b.i)
         .map(({ c }) => c),
-    [counts],
+    [counts, visible],
   )
 
   if (loading) {
@@ -140,10 +149,31 @@ export default function Library() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           <Tile hero to="/c/all" slug="all" label="All recipes" count={recipes.length} />
           {sortedCategories.map((c) => (
-            <Tile key={c.slug} to={`/c/${c.slug}`} slug={c.slug} label={c.label} count={counts.get(c.slug)!} />
+            <Tile key={c.slug} to={`/c/${c.slug}`} slug={c.slug} label={c.label} count={counts.get(c.slug) ?? 0} />
           ))}
+          {/* Edit tile — same footprint as a category so the grid stays even */}
+          <button
+            onClick={() => setEditing(true)}
+            className="flex h-32 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-stone-300 text-stone-400 transition active:scale-[0.98] hover:border-paprika-300 hover:text-paprika-700 sm:h-40"
+          >
+            <PlusIcon className="h-6 w-6" />
+            <span className="text-xs font-medium">Edit categories</span>
+          </button>
         </div>
       )}
+
+      {editing && (
+        <CategoryEditor
+          all={all}
+          isVisible={isVisible}
+          onToggle={toggle}
+          onAddCustom={addCustom}
+          onRemoveCustom={removeCustom}
+          onClose={() => setEditing(false)}
+        />
+      )}
+
+      {onboarding && <Onboarding onDone={() => setOnboarding(false)} />}
     </div>
   )
 }

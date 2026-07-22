@@ -2,12 +2,15 @@ import { useMemo } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useRecipes } from '../lib/useRecipes'
 import { categoryBySlug, recipeInCategory } from '../lib/categories'
+import { useCategoryPrefs } from '../lib/useCategoryPrefs'
 import RecipeCard from '../components/RecipeCard'
 
 export default function Category() {
   const { slug } = useParams()
   const isAll = slug === 'all'
-  const category = categoryBySlug(slug)
+  // Look in the built-ins first, then the user's own custom categories.
+  const { all } = useCategoryPrefs()
+  const category = categoryBySlug(slug) ?? all.find((c) => c.slug === slug)
   const { recipes, loading } = useRecipes()
 
   const list = useMemo(() => {

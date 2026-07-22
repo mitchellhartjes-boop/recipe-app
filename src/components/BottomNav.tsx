@@ -14,8 +14,8 @@ export default function BottomNav() {
   ]
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/70 bg-cream/90 pb-safe-b backdrop-blur-lg sm:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-4 px-1 pt-1.5">
+    <nav className="fixed inset-x-0 bottom-0 z-30 w-full max-w-full border-t border-stone-200/70 bg-cream/90 pb-safe-b backdrop-blur-lg sm:hidden">
+      <div className="mx-auto grid w-full max-w-md grid-cols-4 px-1 pt-1.5">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} className="flex flex-col items-center gap-1 py-2 transition active:opacity-60">
             <span
