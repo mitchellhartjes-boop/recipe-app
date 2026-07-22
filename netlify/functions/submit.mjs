@@ -259,7 +259,25 @@ export default async (req) => {
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }
-    return json({ ok: false, status: 'no_recipe', message: 'Couldn’t find a recipe at that link.' })
+    // Some sites (Pinterest especially) serve a JavaScript-only shell to
+    // server-side fetchers — the fetched HTML genuinely contains no recipe
+    // text, so there is nothing to extract no matter how good the model is.
+    // Point the user at the screenshot path, which reads what THEY can see.
+    const host = (() => {
+      try {
+        return new URL(link).hostname.replace(/^www\./, '')
+      } catch {
+        return null
+      }
+    })()
+    const jsOnlySite = /pinterest\.|tiktok\.|facebook\./i.test(host ?? '')
+    return json({
+      ok: false,
+      status: 'no_recipe',
+      message: jsOnlySite
+        ? `${host} doesn’t share its recipe text with apps. Screenshot the recipe and share the image instead — that works every time.`
+        : 'Couldn’t find a recipe at that link. If you can see the recipe on screen, screenshot it and share the image instead.',
+    })
   } catch (e) {
     return json({ ok: false, message: e?.message || 'Something went wrong.' }, 502)
   }
