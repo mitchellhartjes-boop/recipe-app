@@ -259,9 +259,65 @@ export async function extractReel(url, { apiKey } = {}) {
 }
 
 // Generic recipe web page: fetch -> JSON-LD + visible text -> Claude.
+// ---- Pinterest ------------------------------------------------------------
+// A pin page cannot be read server-side: Pinterest returns a ~1.1MB JavaScript
+// shell behind bot detection, with no og: tags, no recipe text, and no trace of
+// the pin's destination (verified against live pins). Its PUBLIC WIDGET
+// endpoint, though, returns the pin as JSON — including `link`, the page the pin
+// actually points at. Resolve that and the ordinary website path takes over, so
+// a Pinterest recipe imports exactly like sharing the blog directly.
+const PIN_INFO = 'https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids='
+
+// Handles both /pin/<id>/ and the slug form /pin/<words>--<id>/.
+export function pinterestPinId(url) {
+  const m = String(url ?? '').match(/\/pin\/(?:[^/]*?--)?(\d+)/)
+  return m ? m[1] : null
+}
+
+// -> { link, description } | null. `link` is null for pins that are just an
+// uploaded image or video with nothing to click through to.
+export async function resolvePinterestLink(url) {
+  let target = String(url ?? '')
+  // pin.it is the short link the iOS share sheet produces; it carries no pin id,
+  // so it has to be expanded before the widget endpoint can be queried.
+  if (/^https?:\/\/(www\.)?pin\.it\//i.test(target)) {
+    try {
+      const res = await fetch(target, { headers: { 'User-Agent': WEB_UA }, redirect: 'follow' })
+      target = res.url || target
+    } catch {
+      /* fall through — the id extraction below just fails and we return null */
+    }
+  }
+  const id = pinterestPinId(target)
+  if (!id) return null
+  try {
+    const res = await fetch(PIN_INFO + encodeURIComponent(id), {
+      headers: { 'User-Agent': WEB_UA, Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const pin = (await res.json())?.data?.[0]
+    if (!pin) return null
+    const link = typeof pin.link === 'string' && /^https?:\/\//i.test(pin.link) ? pin.link : null
+    return { link, description: typeof pin.description === 'string' ? pin.description : null }
+  } catch {
+    return null
+  }
+}
+
+// Statuses that mean "a bot shield answered", not "this page is broken". Big
+// recipe publishers (Dotdash Meredith sites answer 402, Cloudflare ones 403)
+// serve these to any server-side fetch no matter how honest the User-Agent is,
+// so the caller should tell the user to screenshot rather than report an error.
+const BLOCKED_STATUSES = new Set([401, 402, 403, 406, 429, 451])
+
 export async function extractWebPage({ url, apiKey }) {
   const res = await fetch(url, { headers: { 'User-Agent': WEB_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
-  if (!res.ok) throw new Error(`Web page fetch failed (HTTP ${res.status})`)
+  if (!res.ok) {
+    const err = new Error(`Web page fetch failed (HTTP ${res.status})`)
+    err.status = res.status
+    err.blocked = BLOCKED_STATUSES.has(res.status)
+    throw err
+  }
   const html = await res.text()
   const imageUrl = extractOgImage(html)
   const jsonLd = extractJsonLd(html)

@@ -14,7 +14,7 @@
 // defaults scope the row correctly (same mechanism as worker/index.mjs).
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { extractReel, extractWebPage, extractRecipeFromImage } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromImage, resolvePinterestLink } from './_lib/extract.mjs'
 import { coverImage } from './_lib/images.mjs'
 
 const CORS = {
@@ -31,6 +31,19 @@ function json(body, status = 200) {
 }
 
 const isInstagram = (url) => /instagram\.com\//i.test(url)
+
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
+// pin.it is the short link the iOS share sheet produces; the regex also covers
+// the country domains (nl.pinterest.com, pinterest.co.uk) while refusing
+// lookalikes like pinterestrecipes.net.
+const isPinterest = (host) => !!host && (host === 'pin.it' || /(^|\.)pinterest\.[a-z.]+$/i.test(host))
 
 // Pull the first http(s) URL out of whatever the share sheet handed us (it may be
 // "Check this out: https://…" rather than a bare URL). Trim trailing punctuation.
@@ -250,27 +263,56 @@ export default async (req) => {
       return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
     }
 
+    // A Pinterest pin is unreadable server-side, but the pin's widget metadata
+    // exposes the page it points at — so resolve the pin and carry on with THAT
+    // url, which makes a shared pin import exactly like sharing the blog.
+    // (`pin.it` is the short link the iOS share sheet produces; it carries no
+    // pin id, so resolvePinterestLink expands it first.)
+    let pageUrl = link
+    if (isPinterest(hostOf(link))) {
+      const pin = await resolvePinterestLink(link)
+      const dest = pin?.link && !isPinterest(hostOf(pin.link)) ? pin.link : null
+      if (!dest) {
+        return json({
+          ok: false,
+          status: 'no_recipe',
+          kind: 'pinterest',
+          message:
+            'That pin doesn’t link out to a recipe page — it’s just an image or video. Screenshot the recipe and share the image instead.',
+        })
+      }
+      pageUrl = dest
+    }
+    const host = hostOf(pageUrl)
+
     // Generic web URL (recipe blog, Pinterest-resolved link, etc.) — fast path, save directly.
-    const res = await extractWebPage({ url: link, apiKey })
+    let res
+    try {
+      res = await extractWebPage({ url: pageUrl, apiKey })
+    } catch (e) {
+      // A bot shield answered instead of the page. This is common on the big
+      // recipe publishers that Pinterest pins point at, and it is not something
+      // a retry fixes — the screenshot path reads what the USER can see.
+      if (e?.blocked) {
+        return json({
+          ok: false,
+          status: 'blocked',
+          kind: 'web',
+          message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
+        })
+      }
+      throw e
+    }
     if (res.recipe.found) {
       const cover = await coverImage(supabase, { srcUrl: res.imageUrl, keyHint: res.recipe.title || 'recipe' })
-      const record = toRecord(res.recipe, { url: link, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
+      const record = toRecord(res.recipe, { url: pageUrl, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
       const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }
-    // Some sites (Pinterest especially) serve a JavaScript-only shell to
-    // server-side fetchers — the fetched HTML genuinely contains no recipe
-    // text, so there is nothing to extract no matter how good the model is.
-    // Point the user at the screenshot path, which reads what THEY can see.
-    const host = (() => {
-      try {
-        return new URL(link).hostname.replace(/^www\./, '')
-      } catch {
-        return null
-      }
-    })()
-    const jsOnlySite = /pinterest\.|tiktok\.|facebook\./i.test(host ?? '')
+    // The page loaded but carried no recipe. Other JS-only shells (TikTok,
+    // Facebook) land here; Pinterest is answered earlier, before the fetch.
+    const jsOnlySite = /tiktok\.|facebook\./i.test(host ?? '')
     return json({
       ok: false,
       status: 'no_recipe',
