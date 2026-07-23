@@ -8,5 +8,7 @@
 	<array>
 		<string>group.com.mitchellhartjes.dilla</string>
 	</array>
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

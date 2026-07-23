@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from './lib/auth'
+import { usePushRegistration } from './lib/usePushRegistration'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Library from './pages/Library'
@@ -22,6 +23,9 @@ function Protected({ children }: { children: ReactNode }) {
 
 export default function App() {
   const { session } = useAuth()
+  // Register for push once there's a signed-in user, and re-register if the
+  // account changes — the token is filed against whoever is signed in.
+  usePushRegistration(session?.user?.id)
   return (
     <BrowserRouter>
       <Routes>

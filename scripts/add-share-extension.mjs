@@ -225,6 +225,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
 // re-ensured on EVERY run — putting them after the target-exists early-exit
 // meant a regenerated ios/ silently lost them.
 
+// 0. Push entitlement. Required for the worker to announce an async import (a
+// video reel, a slow link-in-bio recovery) once the app is suspended — a local
+// notification cannot fire then. MUST be "production": TestFlight and App Store
+// builds both use Apple's production APNs, and a build entitled "development"
+// fails at delivery with BadDeviceToken rather than at build time, which makes
+// it a genuinely nasty thing to get wrong.
+{
+  const entitlements = resolve(root, 'ios/App/App/App.entitlements')
+  let xml = readFileSync(entitlements, 'utf8')
+  if (!xml.includes('aps-environment')) {
+    xml = xml.replace(
+      /<\/dict>\s*<\/plist>\s*$/,
+      `	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>
+`,
+    )
+    writeFileSync(entitlements, xml)
+    console.log('Added aps-environment (push) to the app entitlements.')
+  }
+}
+
 // 1. dilla:// URL scheme in the app Info.plist (deep links; harmless to keep).
 {
   const appPlist = resolve(root, 'ios/App/App/Info.plist')
