@@ -54,6 +54,43 @@ function firstUrl(input) {
   return m[0].replace(/[.,)\]}'"]+$/, '')
 }
 
+// Repair a URL the caption extractor handed back before anything tries to fetch
+// it. Haiku is inconsistent about schemes — it returns "www.site.com/recipe" as
+// readily as a full URL, and fetch() throws a raw TypeError on the bare form.
+// Also unwraps Instagram's l.instagram.com redirector and strips tracking params.
+// Returns null when the string isn't host-shaped at all.
+function normalizeUrl(raw) {
+  if (typeof raw !== 'string') return null
+  let s = raw.trim().replace(/[.,)\]}'"]+$/, '')
+  if (!s) return null
+
+  if (/^(https?:\/\/)?l\.instagram\.com/i.test(s)) {
+    try {
+      const wrapped = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`)
+      const target = wrapped.searchParams.get('u')
+      if (target) s = decodeURIComponent(target)
+    } catch {
+      /* not parseable as a wrapper — fall through and treat it as a plain url */
+    }
+  }
+
+  if (!/^https?:\/\//i.test(s)) {
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(s)) return null // not host-shaped
+    s = `https://${s}`
+  }
+
+  try {
+    const u = new URL(s)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(fbclid|gclid|igshid|si|ref)$/i.test(key)) u.searchParams.delete(key)
+    }
+    return u.toString()
+  } catch {
+    return null
+  }
+}
+
 // Constant-time token compare (hash first so lengths never differ / leak).
 function tokenMatches(provided, expected) {
   if (!provided || !expected) return false
@@ -239,14 +276,26 @@ export default async (req) => {
       // the caption, fetch it now via the cheap+instant website path. (We no longer run the slow,
       // expensive Claude web_search recovery — the user shares the blog link directly instead.)
       if (r.where_is_recipe === 'external_link' || r.external_url) {
-        if (r.external_url) {
-          const web = await extractWebPage({ url: r.external_url, apiKey })
-          if (web.recipe.found) {
-            const cover = await coverImage(supabase, { srcUrl: web.imageUrl, keyHint: web.recipe.title || r.title || 'recipe' })
-            const record = toRecord(web.recipe, { url: r.external_url, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
-            const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
-            if (error) throw error
-            return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+        const target = normalizeUrl(r.external_url)
+        if (target) {
+          // This call used to be completely unguarded, so every way it can fail
+          // reached the user as a 502 full of raw developer text: a scheme-less
+          // URL threw "Failed to parse URL", a dead caption link threw HTTP 404,
+          // and a bot-shielded publisher threw HTTP 402. None of those are worth
+          // surfacing — they all mean the same thing to the user, which is that
+          // we couldn't read the linked page, so fall through to the friendly
+          // "open it and share the page" message below.
+          try {
+            const web = await extractWebPage({ url: target, apiKey })
+            if (web.recipe.found) {
+              const cover = await coverImage(supabase, { srcUrl: web.imageUrl, keyHint: web.recipe.title || r.title || 'recipe' })
+              const record = toRecord(web.recipe, { url: target, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
+              const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+              if (error) throw error
+              return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+            }
+          } catch {
+            /* unreadable linked page — handled by the message below */
           }
         }
         const who = r.source_author ? `@${r.source_author}'s` : "the creator's"
