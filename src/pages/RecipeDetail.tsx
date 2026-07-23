@@ -5,6 +5,7 @@ import type { Recipe } from '../lib/types'
 import { scaleIngredient, parseServings } from '../lib/scale'
 import { groupIngredients } from '../lib/groupIngredients'
 import { addGroceryItems } from '../lib/useGrocery'
+import { useWakeLock } from '../lib/useWakeLock'
 import GrocerySheet from '../components/GrocerySheet'
 import CookMode from '../components/CookMode'
 import RecipeCover from '../components/RecipeCover'
@@ -24,6 +25,12 @@ export default function RecipeDetail() {
   const [cookStart, setCookStart] = useState(0)
   const [grocery, setGrocery] = useState<'idle' | 'added'>('idle')
   const [grocerySheet, setGrocerySheet] = useState(false)
+
+  // Plenty of cooking happens straight off this page without ever opening Cook
+  // Mode, so the screen has to stay awake here too — otherwise the phone blacks
+  // out mid-recipe with flour on your hands. Held for the whole page rather than
+  // only while cooking, since there's no way to know when that starts.
+  useWakeLock()
 
   useEffect(() => {
     let active = true
@@ -86,9 +93,20 @@ export default function RecipeDetail() {
     setCookStart(at)
     setCooking(true)
   }
+  // Count another cook. Read-modify-write is safe here: one user, one device at
+  // a time, and an occasional lost increment on a counter is not worth a round
+  // trip to an RPC for.
+  async function markMade() {
+    if (!recipe) return
+    const next = (recipe.times_made ?? 0) + 1
+    setRecipe({ ...recipe, times_made: next })
+    await supabase.from('recipe_recipes').update({ times_made: next }).eq('id', recipe.id)
+  }
+
   function closeCooking(finished?: boolean) {
     setCooking(false)
     if (finished) {
+      void markMade()
       setTimeout(() => document.getElementById('rating')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
     }
   }
@@ -128,6 +146,18 @@ export default function RecipeDetail() {
           </button>
         ))}
         <span className="ml-1.5 text-xs text-stone-400">{recipe.rating ? `${recipe.rating}/5` : 'Tap to rate'}</span>
+
+        {/* Finishing Cook Mode counts a cook automatically, but cooking straight
+            from this page (no Cook Mode) is just as common — so it needs to be
+            loggable by hand, or "Most made" would only ever see half the cooks. */}
+        <button
+          onClick={() => void markMade()}
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-paper px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm transition active:scale-95"
+          aria-label="Log that you cooked this"
+        >
+          <CheckIcon className="h-3.5 w-3.5" />
+          {recipe.times_made > 0 ? `Made ${recipe.times_made}×` : 'Made it'}
+        </button>
       </div>
 
       {recipe.description && <p className="mt-3 text-stone-600">{recipe.description}</p>}
@@ -146,16 +176,6 @@ export default function RecipeDetail() {
       </div>
 
       <SourceCredit recipe={recipe} />
-
-      {recipe.tags?.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {recipe.tags.map((t) => (
-            <span key={t} className="rounded-full bg-paprika-50 px-3 py-1 text-xs font-medium text-paprika-800">
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
 
       {steps.length > 0 && (
         <button

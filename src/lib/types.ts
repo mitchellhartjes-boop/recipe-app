@@ -26,6 +26,9 @@ export type Recipe = {
   tags: string[]
   notes: string | null
   rating: number | null
+  /** How many times this has actually been cooked — drives the "Most made"
+   *  sort. Incremented on finishing Cook Mode or tapping "Made it". */
+  times_made: number
   favorite: boolean
   status: 'draft' | 'saved'
   extraction_meta: Record<string, unknown>

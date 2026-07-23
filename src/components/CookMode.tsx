@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CloseIcon, CheckIcon } from './icons'
 import type { IngredientGroup } from '../lib/groupIngredients'
 import type { Recipe } from '../lib/types'
+import { useWakeLock } from '../lib/useWakeLock'
 import SourceCredit from './SourceCredit'
 
 type Props = {
@@ -22,30 +23,10 @@ type Props = {
 export default function CookMode({ title, recipe, steps, ingredients, ingredientGroups, checked, onToggle, initialStep = 0, onClose }: Props) {
   const [i, setI] = useState(Math.min(initialStep, Math.max(0, steps.length - 1)))
   const [sheet, setSheet] = useState(false)
-  const wakeRef = useRef<{ release: () => Promise<void> } | null>(null)
 
-  // Keep the screen awake while cooking; re-acquire when returning to the tab
-  // (the OS auto-releases the lock when the page is hidden).
-  useEffect(() => {
-    const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }
-    async function acquire() {
-      try {
-        wakeRef.current = (await nav.wakeLock?.request('screen')) ?? null
-      } catch {
-        /* unsupported or denied — fine, cooking still works */
-      }
-    }
-    void acquire()
-    const onVis = () => {
-      if (document.visibilityState === 'visible') void acquire()
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      document.removeEventListener('visibilitychange', onVis)
-      void wakeRef.current?.release().catch(() => {})
-      wakeRef.current = null
-    }
-  }, [])
+  // Keep the screen awake while cooking. (The recipe page holds one too, so
+  // cooking straight from there doesn't dim either.)
+  useWakeLock()
 
   // Desktop convenience: arrow keys + escape.
   useEffect(() => {

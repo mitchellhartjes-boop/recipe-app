@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useRecipes } from '../lib/useRecipes'
 import { categoryBySlug, recipeInCategory } from '../lib/categories'
 import { useCategoryPrefs } from '../lib/useCategoryPrefs'
+import { loadSort, saveSort, sortRecipes, type SortKey } from '../lib/recipeSort'
 import RecipeCard from '../components/RecipeCard'
+import SortMenu from '../components/SortMenu'
 
 export default function Category() {
   const { slug } = useParams()
@@ -12,12 +14,17 @@ export default function Category() {
   const { all } = useCategoryPrefs()
   const category = categoryBySlug(slug) ?? all.find((c) => c.slug === slug)
   const { recipes, loading } = useRecipes()
+  const [sort, setSort] = useState<SortKey>(loadSort)
+
+  function changeSort(key: SortKey) {
+    setSort(key)
+    saveSort(key)
+  }
 
   const list = useMemo(() => {
-    if (isAll) return recipes
-    if (!category) return []
-    return recipes.filter((r) => recipeInCategory(r, category))
-  }, [recipes, isAll, category])
+    const base = isAll ? recipes : category ? recipes.filter((r) => recipeInCategory(r, category)) : []
+    return sortRecipes(base, sort)
+  }, [recipes, isAll, category, sort])
 
   if (!isAll && !category) return <Navigate to="/" replace />
   const label = isAll ? 'All recipes' : category!.label
@@ -26,10 +33,21 @@ export default function Category() {
   return (
     <div className="space-y-5">
       {/* Mobile shows the title in the top bar; desktop gets a heading here. */}
-      <div className="hidden items-end justify-between sm:flex">
+      <div className="hidden sm:block">
         <h1 className="font-display text-3xl font-semibold tracking-tight">{label}</h1>
-        {list.length > 0 && <span className="text-sm text-stone-400">{list.length}</span>}
       </div>
+
+      {/* Count + sort. Deliberately outside the block above, which is
+          desktop-only — this row is the only place the sort control can live on
+          a phone. Hidden for a single recipe, where sorting means nothing. */}
+      {!loading && list.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-stone-400">
+            {list.length} {list.length === 1 ? 'recipe' : 'recipes'}
+          </span>
+          {list.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
+        </div>
+      )}
 
       {loading ? (
         <div className="py-20 text-center text-sm text-stone-400">Loading…</div>
