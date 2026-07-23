@@ -25,6 +25,121 @@ if (!existsSync(projPath)) {
   process.exit(1)
 }
 
+// Canonical AppDelegate. Written verbatim when `cap add ios` regenerates the
+// template (detected by the missing DILLA-SHARE-UPLOAD marker). Must match
+// ios/App/App/AppDelegate.swift exactly.
+const APP_DELEGATE = `import UIKit
+import UserNotifications
+import Capacitor
+
+// DILLA-SHARE-UPLOAD marker — this AppDelegate also receives the Share
+// Extension's BACKGROUND upload and posts the "Saved to Dilla" notification.
+// The Share Extension hands its upload to iOS and dismisses immediately; iOS
+// finishes the transfer and relaunches this app in the background to deliver the
+// result. We adopt the same-identified background session, read submit.mjs's
+// {ok,status,message}, and post a local notification.
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate {
+
+    static let uploadSessionId = "com.mitchellhartjes.dilla.share-upload"
+    static let appGroupId = "group.com.mitchellhartjes.dilla"
+
+    var window: UIWindow?
+
+    private var backgroundCompletion: (() -> Void)?
+    private var responseBytes: [Int: Data] = [:]
+    private let notifyGroup = DispatchGroup()
+
+    private lazy var uploadSession: URLSession = {
+        let cfg = URLSessionConfiguration.background(withIdentifier: AppDelegate.uploadSessionId)
+        cfg.sharedContainerIdentifier = AppDelegate.appGroupId
+        cfg.sessionSendsLaunchEvents = true
+        return URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
+    }()
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .provisional]) { _, _ in }
+        _ = uploadSession
+        return true
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == AppDelegate.uploadSessionId else { completionHandler(); return }
+        backgroundCompletion = completionHandler
+        _ = uploadSession
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        responseBytes[dataTask.taskIdentifier, default: Data()].append(data)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let data = responseBytes.removeValue(forKey: task.taskIdentifier)
+        if let path = task.taskDescription { try? FileManager.default.removeItem(atPath: path) }
+
+        let outcome = AppDelegate.outcome(data: data, response: task.response, error: error)
+        let content = UNMutableNotificationContent()
+        content.title = outcome.title
+        content.body = outcome.body
+        content.sound = .default
+
+        notifyGroup.enter()
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        ) { [weak self] _ in
+            self?.notifyGroup.leave()
+        }
+    }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        notifyGroup.notify(queue: .main) { [weak self] in
+            self?.backgroundCompletion?()
+            self?.backgroundCompletion = nil
+        }
+    }
+
+    static func outcome(data: Data?, response: URLResponse?, error: Error?) -> (title: String, body: String) {
+        if error != nil {
+            return ("Dilla couldn't save that", "Couldn't reach Dilla — check your connection and try again.")
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        if let json {
+            let ok = (json["ok"] as? Bool) ?? false
+            let serverStatus = (json["status"] as? String) ?? ""
+            let message = (json["message"] as? String) ?? "Recipe imported."
+            if ok && serverStatus == "queued" {
+                return ("Working on it…", message)
+            } else if ok {
+                return ("Saved to Dilla", message)
+            } else {
+                return ("Dilla couldn't save that", message)
+            }
+        }
+        if (400...499).contains(statusCode) {
+            return ("Dilla couldn't save that", "That share couldn't be imported — try a screenshot instead.")
+        }
+        return ("Still importing…", "This one's taking a moment — it'll appear in Dilla shortly.")
+    }
+
+    func applicationWillResignActive(_ application: UIApplication) {}
+    func applicationDidEnterBackground(_ application: UIApplication) {}
+    func applicationWillEnterForeground(_ application: UIApplication) {}
+    func applicationDidBecomeActive(_ application: UIApplication) {}
+    func applicationWillTerminate(_ application: UIApplication) {}
+
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+    }
+
+    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    }
+
+}
+`
+
 // --- always-run patches (independent of whether the target exists) ----------
 // These files are regenerated from templates by `npx cap add ios`, so they are
 // re-ensured on EVERY run — putting them after the target-exists early-exit
@@ -57,32 +172,18 @@ if (!existsSync(projPath)) {
   }
 }
 
-// 2. Notification permission request in AppDelegate. The Share Extension posts
-// a "Saved to Dilla" local notification while the user stays in Instagram —
-// but only the MAIN APP can request that permission, so it must be in the
-// app's launch path.
+// 2. AppDelegate. It both requests notification permission (extensions can't;
+// only the main app can) AND adopts the Share Extension's background upload
+// session to post the "Saved to Dilla" notification when the import finishes.
+// `npx cap add ios` regenerates this file from the Capacitor template, so if
+// our marker is absent we overwrite it wholesale with the known-good version.
+// ⚠️ Keep APP_DELEGATE below in sync with ios/App/App/AppDelegate.swift.
 {
   const adPath = resolve(root, 'ios/App/App/AppDelegate.swift')
-  let ad = readFileSync(adPath, 'utf8')
-  if (!ad.includes('UNUserNotificationCenter')) {
-    ad = ad.replace('import UIKit', 'import UIKit\nimport UserNotifications')
-    const anchor = '// Override point for customization after application launch.'
-    const inject =
-      `${anchor}\n` +
-      `        // Ask for notification permission so the Share Extension can announce\n` +
-      `        // "Saved to Dilla" while the user stays in Instagram. Extensions cannot\n` +
-      `        // request this permission themselves — the main app must.\n` +
-      `        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }`
-    if (ad.includes(anchor)) {
-      ad = ad.replace(anchor, inject)
-    } else {
-      ad = ad.replace(
-        /didFinishLaunchingWithOptions[^{]*\{/,
-        (m) => `${m}\n        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }`,
-      )
-    }
-    writeFileSync(adPath, ad)
-    console.log('Added notification-permission request to AppDelegate.')
+  const ad = readFileSync(adPath, 'utf8')
+  if (!ad.includes('DILLA-SHARE-UPLOAD')) {
+    writeFileSync(adPath, APP_DELEGATE)
+    console.log('Rewrote AppDelegate with the Dilla share-upload receiver.')
   }
 }
 
