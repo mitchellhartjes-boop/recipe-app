@@ -14,7 +14,7 @@ import Capacitor
 // ios` ever regenerates ios/ from the Capacitor template.
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, UNUserNotificationCenterDelegate {
 
     static let uploadSessionId = "com.mitchellhartjes.dilla.share-upload"
     static let appGroupId = "group.com.mitchellhartjes.dilla"
@@ -42,18 +42,42 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate {
     }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Provisional authorization so the Share Extension's import can announce
-        // its result even if the user has never opened Dilla (the whole point is
-        // that they stay in Instagram). Provisional grants silently — no prompt —
-        // and delivers quietly to Notification Center; iOS then lets the user
-        // promote it to prominent from the first notification itself. A plain
-        // [.alert,.sound] request cannot be granted from a background relaunch,
-        // which is exactly when the first share arrives.
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .provisional]) { _, _ in }
+        // Present our own notifications while the app is frontmost — without a
+        // delegate iOS silently suppresses them, so an import that lands while
+        // the user is looking at Dilla would produce no feedback at all.
+        UNUserNotificationCenter.current().delegate = self
+        requestNotificationAuthorization(canPrompt: application.applicationState != .background)
         // Touch the session so we adopt any upload the extension already started
         // (covers the case where the app is opened before the upload finishes).
         _ = uploadSession
         return true
+    }
+
+    // Ask for notification permission in the strongest form the current launch
+    // allows. Foreground: request the real thing, so the user gets a prompt and
+    // proper banners + sound. Background relaunch — which is exactly how the
+    // FIRST share arrives if Dilla has never been opened — cannot present a
+    // prompt, so fall back to provisional: quiet delivery beats none, and iOS
+    // offers to promote it to prominent from the notification itself.
+    //
+    // Guarded on .notDetermined because requestAuthorization only ever prompts
+    // in that state; asking for provisional unconditionally would record a
+    // provisional grant and permanently lock the app out of loud notifications.
+    private func requestNotificationAuthorization(canPrompt: Bool) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .notDetermined else { return }
+            let options: UNAuthorizationOptions = canPrompt
+                ? [.alert, .sound]
+                : [.alert, .sound, .provisional]
+            center.requestAuthorization(options: options) { _, _ in }
+        }
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .list])
     }
 
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
@@ -102,31 +126,38 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate {
     // Turn submit.mjs's response into a notification title + body. Shared shape
     // with the Share Extension's own fast-path handler; keep the two in sync.
     static func outcome(data: Data?, response: URLResponse?, error: Error?) -> (title: String, body: String) {
-        if error != nil {
-            return ("Dilla couldn't save that", "Couldn't reach Dilla — check your connection and try again.")
-        }
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        if let json {
-            let ok = (json["ok"] as? Bool) ?? false
+
+        // Trust the body only when it is actually submit.mjs's envelope — it
+        // always carries a Bool `ok`. A platform error page (HTML, or a 5xx JSON
+        // envelope of some other shape) must fall through to the status rules
+        // rather than being read as a definitive answer; treating a missing `ok`
+        // as false announced platform errors as recipe rejections.
+        if let data,
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let ok = json["ok"] as? Bool {
             let serverStatus = (json["status"] as? String) ?? ""
-            let message = (json["message"] as? String) ?? "Recipe imported."
+            let message = json["message"] as? String
             if ok && serverStatus == "queued" {
                 // Enqueued for the worker (e.g. a video reel) — not saved yet.
-                return ("Working on it…", message)
-            } else if ok {
-                return ("Saved to Dilla", message)
-            } else {
-                return ("Dilla couldn't save that", message)
+                return ("Working on it…", message ?? "Reading the recipe — it'll appear shortly.")
             }
+            if ok {
+                return ("Saved to Dilla", message ?? "Recipe saved to your library.")
+            }
+            return ("Dilla couldn't save that", message ?? "That share couldn't be imported.")
         }
-        // No parseable JSON. A 4xx is a real rejection; a 5xx / timeout / empty
-        // body may just mean the import is still finishing server-side, so we
-        // must NOT assert failure (that would prompt a duplicate re-share).
+
+        // A 4xx with no usable body is a real rejection.
         if (400...499).contains(statusCode) {
             return ("Dilla couldn't save that", "That share couldn't be imported — try a screenshot instead.")
         }
-        return ("Still importing…", "This one's taking a moment — it'll appear in Dilla shortly.")
+
+        // Transport error, 5xx, platform timeout, or an empty body: the server
+        // never gave us an answer. Nothing is queued and nothing retries, so
+        // don't promise the recipe will appear — but don't assert it failed
+        // either, because the save may have landed before the response died.
+        return ("Dilla couldn't confirm that save", "Open Dilla to check — if the recipe isn't there, share it again.")
     }
 
     // MARK: - Capacitor lifecycle
@@ -134,8 +165,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate {
     func applicationWillResignActive(_ application: UIApplication) {}
     func applicationDidEnterBackground(_ application: UIApplication) {}
     func applicationWillEnterForeground(_ application: UIApplication) {}
-    func applicationDidBecomeActive(_ application: UIApplication) {}
     func applicationWillTerminate(_ application: UIApplication) {}
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // Now we can definitely present a prompt. Covers a first launch that
+        // began in the background (where only provisional was possible) and any
+        // launch where permission was never determined.
+        requestNotificationAuthorization(canPrompt: true)
+    }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,

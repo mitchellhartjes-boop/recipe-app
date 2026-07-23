@@ -41,15 +41,27 @@ final class ShareUploadHandler: NSObject, URLSessionDataDelegate {
 
     private var responseBytes: [Int: Data] = [:]
 
+    // Notifications posted but not yet registered with the notification daemon.
+    // The view controller waits on this before dismissing, because once
+    // completeRequest() runs iOS tears this process down and an in-flight
+    // registration is simply lost — the app is NOT relaunched to retry, since
+    // this process already consumed the task's completion event.
+    let pendingNotifications = DispatchGroup()
+
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         responseBytes[dataTask.taskIdentifier, default: Data()].append(data)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         let data = responseBytes.removeValue(forKey: task.taskIdentifier)
-        if let path = task.taskDescription { try? FileManager.default.removeItem(atPath: path) }
         let outcome = ShareOutcome.make(data: data, response: task.response, error: error)
         postNotification(title: outcome.title, body: outcome.body)
+        // Delete the payload only after the result is registered — if we are
+        // killed first, the file survives for sweepOldPayloads rather than
+        // disappearing along with the notification.
+        pendingNotifications.notify(queue: .global(qos: .utility)) {
+            if let path = task.taskDescription { try? FileManager.default.removeItem(atPath: path) }
+        }
     }
 }
 
@@ -58,27 +70,24 @@ final class ShareUploadHandler: NSObject, URLSessionDataDelegate {
 // relaunch; this handles the fast case in-process. Keep the two in sync.
 enum ShareOutcome {
     static func make(data: Data?, response: URLResponse?, error: Error?) -> (title: String, body: String) {
-        if error != nil {
-            return ("Dilla couldn't save that", "Couldn't reach Dilla — check your connection and try again.")
-        }
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        if let json {
-            let ok = (json["ok"] as? Bool) ?? false
+        if let data,
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let ok = json["ok"] as? Bool {
             let serverStatus = (json["status"] as? String) ?? ""
-            let message = (json["message"] as? String) ?? "Recipe imported."
+            let message = json["message"] as? String
             if ok && serverStatus == "queued" {
-                return ("Working on it…", message)
-            } else if ok {
-                return ("Saved to Dilla", message)
-            } else {
-                return ("Dilla couldn't save that", message)
+                return ("Working on it…", message ?? "Reading the recipe — it'll appear shortly.")
             }
+            if ok {
+                return ("Saved to Dilla", message ?? "Recipe saved to your library.")
+            }
+            return ("Dilla couldn't save that", message ?? "That share couldn't be imported.")
         }
         if (400...499).contains(statusCode) {
             return ("Dilla couldn't save that", "That share couldn't be imported — try a screenshot instead.")
         }
-        return ("Still importing…", "This one's taking a moment — it'll appear in Dilla shortly.")
+        return ("Dilla couldn't confirm that save", "Open Dilla to check — if the recipe isn't there, share it again.")
     }
 }
 
@@ -87,10 +96,25 @@ private func postNotification(title: String, body: String) {
     content.title = title
     content.body = body
     content.sound = .default
+    // Registration is async; track it so dismissal can wait for it rather than
+    // tearing the extension down mid-handoff and dropping the notification.
+    let pending = ShareUploadHandler.shared.pendingNotifications
+    pending.enter()
     UNUserNotificationCenter.current().add(
-        UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil),
-        withCompletionHandler: nil
-    )
+        UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+    ) { _ in pending.leave() }
+}
+
+// Dismiss the share sheet, but never before an in-flight notification has been
+// registered. Bounded: the worst case is a slightly slower dismissal, never a
+// sheet stuck open.
+private func completeAfterPendingNotifications(_ context: NSExtensionContext?, delay: TimeInterval) {
+    DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delay) {
+        _ = ShareUploadHandler.shared.pendingNotifications.wait(timeout: .now() + 1.5)
+        DispatchQueue.main.async {
+            context?.completeRequest(returningItems: [], completionHandler: nil)
+        }
+    }
 }
 
 class ShareViewController: UIViewController {
@@ -218,7 +242,24 @@ class ShareViewController: UIViewController {
             kCGImageSourceThumbnailMaxPixelSize: maxEdge,     // caps the long edge; never upscales
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: cg).jpegData(compressionQuality: 0.8)
+        let image = UIImage(cgImage: cg)
+
+        // JPEG carries no alpha. Encoding a transparent PNG directly composites
+        // it onto BLACK, which can bury dark recipe text; flatten onto white
+        // instead. Only pay for the extra pass when there is actually alpha.
+        let alpha = cg.alphaInfo
+        let hasAlpha = !(alpha == .none || alpha == .noneSkipLast || alpha == .noneSkipFirst)
+        guard hasAlpha else { return image.jpegData(compressionQuality: 0.8) }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let bounds = CGRect(origin: .zero, size: image.size)
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(bounds)
+            image.draw(in: bounds)
+        }.jpegData(compressionQuality: 0.8)
     }
 
     private func loadURL(_ provider: NSItemProvider) {
@@ -288,9 +329,7 @@ class ShareViewController: UIViewController {
             self.spinner.stopAnimating()
             self.spinner.isHidden = true
             self.label.text = "Saving to Dilla — it'll be in your library shortly."
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
-            }
+            completeAfterPendingNotifications(self.extensionContext, delay: 1.2)
         }
     }
 
@@ -302,9 +341,7 @@ class ShareViewController: UIViewController {
             self.spinner.isHidden = true
             self.label.text = message
             postNotification(title: "Dilla couldn't save that", body: message)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-                self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
-            }
+            completeAfterPendingNotifications(self.extensionContext, delay: 1.6)
         }
     }
 

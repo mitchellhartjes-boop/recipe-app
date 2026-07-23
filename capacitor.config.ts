@@ -20,6 +20,12 @@ const config: CapacitorConfig = {
     // double-applies the insets and leaves dead bands top and bottom.
     // Requires viewport-fit=cover in index.html (already set) or env() reads 0.
     contentInset: 'never',
+    // Leave UNUserNotificationCenter.delegate to AppDelegate. Capacitor's bridge
+    // otherwise claims it and returns no presentation options for local
+    // notifications, which silently swallows the Share Extension's "Saved to
+    // Dilla" alert whenever the app happens to be frontmost. Safe to disable:
+    // no local/push notification plugin is installed, so nothing else needs it.
+    handleApplicationNotifications: false,
   },
   plugins: {
     SplashScreen: {
