@@ -18,6 +18,7 @@
 		8D77664AA61F4DA28225D157 /* ShareExtension.appex in Copy Files */ = {isa = PBXBuildFile; fileRef = 729D3BB770C44523B3DE5DC6 /* ShareExtension.appex */; };
 		DA66E9D2BE9043F0AAE9D6D9 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7BFA00B1DE4E4D832541CB /* ShareViewController.swift */; };
 		452C8A71C3CA4721AB4D3B3F /* ShareExtension.entitlements in Resources */ = {isa = PBXBuildFile; fileRef = FFBE315B037349D097ED841A /* ShareExtension.entitlements */; };
+		EFF4D3720BD042749A6F7A29 /* SharedStorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF625B45E5BB4570A07BE49B /* SharedStorePlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		729D3BB770C44523B3DE5DC6 /* ShareExtension.appex */ = {isa = PBXFileReference; name = "ShareExtension.appex"; path = "ShareExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; fileEncoding = undefined; lastKnownFileType = undefined; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; };
 		FE7BFA00B1DE4E4D832541CB /* ShareViewController.swift */ = {isa = PBXFileReference; name = "ShareViewController.swift"; path = "ShareViewController.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		FFBE315B037349D097ED841A /* ShareExtension.entitlements */ = {isa = PBXFileReference; name = "ShareExtension.entitlements"; path = "ShareExtension.entitlements"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		DF625B45E5BB4570A07BE49B /* SharedStorePlugin.swift */ = {isa = PBXFileReference; name = "SharedStorePlugin.swift"; path = "SharedStorePlugin.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +210,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				EFF4D3720BD042749A6F7A29 /* SharedStorePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

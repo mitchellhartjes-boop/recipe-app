@@ -293,6 +293,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
 const proj = xcode.project(projPath)
 proj.parseSync()
 
+// --- always-run: the App Group bridge must be in the App target -------------
+// SharedStorePlugin.swift lets the web layer write the per-user share key into
+// the App Group so the Share Extension can read it. It is our own file, so
+// `cap sync` never adds it — without this the project builds fine and the
+// plugin is simply missing at runtime, which surfaces as every share failing to
+// authenticate. Runs before the target-exists early-exit so a regenerated
+// pbxproj re-acquires it.
+{
+  const unq = (s) => String(s ?? '').replace(/^"|"$/g, '')
+  const targets = proj.pbxNativeTargetSection()
+  const appKey = Object.keys(targets).find((k) => unq(targets[k]?.name) === 'App')
+  const srcPhases = proj.hash.project.objects.PBXSourcesBuildPhase || {}
+  let present = false
+  for (const key of Object.keys(srcPhases)) {
+    const phase = srcPhases[key]
+    if (!phase || typeof phase !== 'object') continue
+    if ((phase.files || []).some((f) => String(f.comment ?? '').includes('SharedStorePlugin.swift'))) present = true
+  }
+  if (appKey && !present) {
+    proj.addSourceFile('SharedStorePlugin.swift', { target: appKey }, 'App')
+    writeFileSync(projPath, proj.writeSync())
+    console.log('Added SharedStorePlugin.swift to the App target.')
+  }
+}
+
 // --- idempotency: bail if the target already exists ------------------------
 // The parser stores names QUOTED ("ShareExtension"), so a raw === comparison
 // silently misses and you get a duplicate target — which breaks the build.

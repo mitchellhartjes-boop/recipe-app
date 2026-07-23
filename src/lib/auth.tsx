@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { unregisterDevice } from './usePushRegistration'
+import { clearShareKey } from './shareKey'
 
 type AuthContextValue = {
   session: Session | null
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // otherwise RLS rejects it and the next person to sign in on this phone
     // inherits the previous user's push notifications.
     await unregisterDevice()
+    await clearShareKey()
     await supabase.auth.signOut()
   }
 

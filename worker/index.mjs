@@ -22,6 +22,9 @@ const PASSWORD = process.env.APP_PASSWORD
 const ANTHROPIC = process.env.ANTHROPIC_API_KEY
 const GROQ = process.env.GROQ_API_KEY
 const APIFY = process.env.APIFY_TOKEN
+// Bypasses RLS so one worker can drain every user's queue. Each recipe is
+// attributed from the job's own user_id — never assumed.
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const TOOLS = path.resolve('tools')
 const win = process.platform === 'win32'
@@ -128,7 +131,14 @@ async function processJob(supabase, job) {
     console.warn(`[job ${job.id}] image capture skipped: ${e.message}`)
   }
 
-  const { data, error } = await supabase.from('recipe_recipes').insert(recipe).select('id').single()
+  // Attribute the recipe to whoever queued the job. Under the service role
+  // auth.uid() is null, so the column default cannot do this — and getting it
+  // wrong would file one user's recipe in another's library.
+  const { data, error } = await supabase
+    .from('recipe_recipes')
+    .insert({ ...recipe, user_id: job.user_id })
+    .select('id')
+    .single()
   if (error) throw error
   await supabase.from('recipe_jobs').update({ status: 'done', recipe_id: data.id, error: null }).eq('id', job.id)
   console.log(`[job ${job.id}] done -> recipe ${data.id} ("${recipe.title}")`)
@@ -138,19 +148,33 @@ async function main() {
   const missing = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'APP_EMAIL', 'APP_PASSWORD', 'ANTHROPIC_API_KEY'].filter(
     (k) => !process.env[k] && !(k === 'VITE_SUPABASE_URL' && SUPABASE_URL) && !(k === 'VITE_SUPABASE_PUBLISHABLE_KEY' && SUPABASE_KEY),
   )
-  if (!SUPABASE_URL || !SUPABASE_KEY || !EMAIL || !PASSWORD || !ANTHROPIC) {
+  if (!SUPABASE_URL || !ANTHROPIC || (!SERVICE_KEY && (!SUPABASE_KEY || !EMAIL || !PASSWORD))) {
     console.error('Missing config. Need: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, APP_EMAIL, APP_PASSWORD, ANTHROPIC_API_KEY (and GROQ_API_KEY for video).')
     console.error('Missing:', missing.join(', ') || '(check APP_EMAIL/APP_PASSWORD/ANTHROPIC_API_KEY)')
     process.exit(1)
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-  const { error: authErr } = await supabase.auth.signInWithPassword({ email: EMAIL, password: PASSWORD })
-  if (authErr) {
-    console.error('Worker login failed:', authErr.message)
-    process.exit(1)
+  // Prefer the service role: the worker drains jobs for EVERY user, and an
+  // RLS-scoped session can only see its own rows — as a single signed-in account
+  // it would silently never pick up anybody else's work. Falls back to the old
+  // account sign-in when the service key isn't configured, so a local run
+  // without it still works on the owner's own jobs.
+  let supabase
+  if (SERVICE_KEY) {
+    supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    console.log(`Recipe worker online — service role (all users). Polling every ${POLL_MS / 1000}s…`)
+  } else {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email: EMAIL, password: PASSWORD })
+    if (authErr) {
+      console.error('Worker login failed:', authErr.message)
+      process.exit(1)
+    }
+    console.warn(`Recipe worker online — signed in as ${EMAIL} (SINGLE ACCOUNT).`)
+    console.warn('Set SUPABASE_SERVICE_ROLE_KEY to process every user\'s jobs.')
   }
-  console.log(`Recipe worker online — signed in as ${EMAIL}. Polling every ${POLL_MS / 1000}s…`)
 
   for (;;) {
     try {

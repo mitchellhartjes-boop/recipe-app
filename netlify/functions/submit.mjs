@@ -1,17 +1,23 @@
-// Share-to-app endpoint for the iOS Shortcut (and any token-holding client).
+// Share-to-app endpoint for the iOS Share Extension (and the legacy Shortcut).
 // One shared URL in -> recipe saved to the library, or a job queued for the worker.
 //
 // POST /.netlify/functions/submit
-//   auth:  Authorization: Bearer <SHORTCUT_TOKEN>   (or X-Shortcut-Token header, or ?token=)
+//   auth:  Authorization: Bearer <share key>   (or X-Shortcut-Token header, or ?token=)
 //   body:  { "url": "https://www.instagram.com/reel/..." }   (also accepts raw text / ?url=)
 //   ->     { ok, status: 'saved'|'queued'|'no_recipe', kind, recipe_id?|job_id?, title?, message }
 //
 // Unlike /extract (which returns a draft for the on-screen review step), this saves directly:
-// the phone share flow has no review screen. Fast paths (Instagram caption, recipe website) are
-// extracted + saved synchronously; slow paths (link-in-bio web_search, video) are enqueued for
-// the worker, exactly like the web app's createJob(). The recipe is owned by the app user — the
-// function signs in with APP_EMAIL/APP_PASSWORD so Supabase RLS + the `auth.uid()` column
-// defaults scope the row correctly (same mechanism as worker/index.mjs).
+// the phone share flow has no review screen. Fast paths (Instagram caption, recipe website,
+// link-in-bio recovery) are extracted + saved synchronously; slow paths (video) are enqueued for
+// the worker, exactly like the web app's createJob().
+//
+// OWNERSHIP: the bearer token is a PER-USER share key (share_keys), minted on the
+// user's device and read by the extension from the App Group — so a recipe lands
+// in the library of whoever shared it. resolveCaller() is the security boundary;
+// insertRecipe()/insertJob() are the only places user_id is set, because under the
+// service role RLS is not enforcing anything and attribution is ours to get right.
+// A build-wide SHORTCUT_TOKEN is still accepted as a legacy fallback mapping to
+// the owner's account, so older installs and the original Shortcut keep working.
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { extractReel, extractWebPage, extractRecipeFromImage, resolvePinterestLink } from './_lib/extract.mjs'
@@ -127,6 +133,67 @@ async function signedInClient() {
   return supabase
 }
 
+// Service-role client. Bypasses RLS, so it is ONLY ever used with an explicitly
+// resolved user_id (see insertRecipe/insertJob, the single places that set it).
+// Returns null when unconfigured, which keeps the legacy single-account path
+// working rather than taking every import down.
+function adminClient() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return null
+  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+// Work out WHO is importing. This is the security boundary of the share path:
+// everything downstream writes as the user resolved here, and nothing else.
+async function resolveCaller(provided) {
+  const admin = adminClient()
+
+  // Per-user share key — the path every app user takes. The key is minted on
+  // their device, stored in share_keys, and read by the Share Extension from
+  // the App Group, so it identifies a PERSON rather than a build.
+  if (admin && provided) {
+    const { data } = await admin
+      .from('share_keys')
+      .select('user_id, revoked_at')
+      .eq('key', provided)
+      .maybeSingle()
+    if (data && !data.revoked_at) {
+      // Not awaited: last_used_at is for pruning stale devices later, and it
+      // must never delay or fail an import.
+      void admin.from('share_keys').update({ last_used_at: new Date().toISOString() }).eq('key', provided)
+      return { supabase: admin, userId: data.user_id, mode: 'share_key' }
+    }
+  }
+
+  // Legacy build-wide token -> the owner's account. Kept so installs that
+  // haven't been reopened since updating, and the original iOS Shortcut, keep
+  // working through the transition. Remove once everyone has moved over.
+  const legacy = process.env.SHORTCUT_TOKEN
+  if (legacy && tokenMatches(provided, legacy)) {
+    const owner = await signedInClient()
+    const { data, error } = await owner.auth.getUser()
+    if (error || !data?.user) throw new Error('Legacy owner sign-in returned no user')
+    return { supabase: admin ?? owner, userId: data.user.id, mode: 'legacy' }
+  }
+
+  return null
+}
+
+// THE one place a recipe's owner is set. Every insert goes through here so that
+// under the service role — where RLS is not enforcing anything — a single
+// audited line decides attribution, rather than five call sites that could drift.
+// user_id is set explicitly and is NEVER taken from the request body.
+function insertRecipe(supabase, userId, record) {
+  return supabase.from('recipe_recipes').insert({ ...record, user_id: userId }).select('id').single()
+}
+
+// Same contract for queued work, so a job the worker later completes is
+// attributed to the person who shared it.
+function insertJob(supabase, userId, row) {
+  return supabase.from('recipe_jobs').insert({ ...row, user_id: userId }).select('id').single()
+}
+
 // Normalize an extractor recipe into a recipe_recipes row (status 'saved' = shows in the library).
 function toRecord(r, { url, sourcePlatform, sourceKind, imageUrl, model }) {
   return {
@@ -200,12 +267,20 @@ export default async (req) => {
     /* tolerate empty/garbled bodies; auth + url checks below handle it */
   }
 
-  // --- auth ---
-  const expected = process.env.SHORTCUT_TOKEN
-  if (!expected) return json({ ok: false, message: 'Server is missing SHORTCUT_TOKEN' }, 500)
-  if (!tokenMatches(getToken(req, body, urlObj), expected)) {
-    return json({ ok: false, message: 'Unauthorized — check the token in your Shortcut.' }, 401)
+  // --- auth: resolve which user this import belongs to ---
+  let caller
+  try {
+    caller = await resolveCaller(getToken(req, body, urlObj))
+  } catch (e) {
+    return json({ ok: false, message: e?.message || 'Could not verify this device.' }, 500)
   }
+  if (!caller) {
+    return json(
+      { ok: false, message: 'This device isn’t linked to a Dilla account — open the app once, then try sharing again.' },
+      401,
+    )
+  }
+  const userId = caller.userId
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return json({ ok: false, message: 'Server is missing ANTHROPIC_API_KEY' }, 500)
@@ -219,7 +294,7 @@ export default async (req) => {
   const img = getImage(body, urlObj)
   if (img) {
     try {
-      const supabase = await signedInClient()
+      const supabase = caller.supabase
       const { recipe: r, model } = await extractRecipeFromImage({ base64: img.base64, mediaType: img.mediaType, apiKey })
       if (!r.found) {
         return json({
@@ -230,7 +305,7 @@ export default async (req) => {
         })
       }
       const record = toRecord(r, { url: null, sourcePlatform: 'instagram', sourceKind: 'screenshot', imageUrl: null, model })
-      const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+      const { data, error } = await insertRecipe(supabase, userId, record)
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'screenshot', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” from your screenshot.` })
     } catch (e) {
@@ -247,7 +322,7 @@ export default async (req) => {
   }
 
   try {
-    const supabase = await signedInClient()
+    const supabase = caller.supabase
 
     if (isInstagram(link)) {
       const res = await extractReel(link, { apiKey })
@@ -257,9 +332,9 @@ export default async (req) => {
         // without an image, then a 'cover' job pulls Apify's clean, higher-res cover and fills it
         // in live (~1-2 min via the on-demand worker).
         const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: null, model: res.model })
-        const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+        const { data, error } = await insertRecipe(supabase, userId, record)
         if (error) throw error
-        await supabase.from('recipe_jobs').insert({ url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        await insertJob(supabase, userId, { url: link, kind: 'cover', meta: { recipe_id: data.id } })
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: null, message: `Saved “${record.title}” to your library.` })
       }
       // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
@@ -291,7 +366,7 @@ export default async (req) => {
             if (web.recipe.found) {
               const cover = await coverImage(supabase, { srcUrl: web.imageUrl, keyHint: web.recipe.title || r.title || 'recipe' })
               const record = toRecord(web.recipe, { url: target, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
-              const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+              const { data, error } = await insertRecipe(supabase, userId, record)
               if (error) throw error
               return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
             }
@@ -321,7 +396,7 @@ export default async (req) => {
             { ...recovered.recipe, source_author: r.source_author ?? res.handle ?? null },
             { url: recovered.url, sourcePlatform: 'web', sourceKind: 'link_in_bio', imageUrl: cover, model: 'json-ld' },
           )
-          const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+          const { data, error } = await insertRecipe(supabase, userId, record)
           if (error) throw error
           return json({
             ok: true,
@@ -345,7 +420,7 @@ export default async (req) => {
         })
       }
       // Otherwise the recipe is in the video itself -> queue the video (Apify) path.
-      const { data, error } = await supabase.from('recipe_jobs').insert({ url: link, kind: 'video', meta: {} }).select('id').single()
+      const { data, error } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: {} })
       if (error) throw error
       return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
     }
@@ -393,7 +468,7 @@ export default async (req) => {
     if (res.recipe.found) {
       const cover = await coverImage(supabase, { srcUrl: res.imageUrl, keyHint: res.recipe.title || 'recipe' })
       const record = toRecord(res.recipe, { url: pageUrl, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
-      const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+      const { data, error } = await insertRecipe(supabase, userId, record)
       if (error) throw error
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }

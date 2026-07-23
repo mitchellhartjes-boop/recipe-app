@@ -119,11 +119,21 @@ private func completeAfterPendingNotifications(_ context: NSExtensionContext?, d
 
 class ShareViewController: UIViewController {
 
-    // Injected into this extension's Info.plist by CI (PlistBuddy) from the
-    // SHORTCUT_TOKEN env var — never committed to the (public) repo. Local
-    // checkouts have it empty, which is fine: real builds only happen on CI.
+    // Who is importing. Prefers the per-user share key the app writes into the
+    // App Group on login — that is what makes a recipe land in the SHARER's
+    // library rather than one shared account, which is required now that the app
+    // is going public.
+    //
+    // Falls back to the old build-wide DillaShortcutToken (injected into
+    // Info.plist by CI) so an install that has not been opened since updating,
+    // or a user still on the iOS Shortcut, keeps working. The server treats that
+    // token as legacy and maps it to the owner's account.
     private var token: String {
-        (Bundle.main.object(forInfoDictionaryKey: "DillaShortcutToken") as? String) ?? ""
+        if let shared = UserDefaults(suiteName: kAppGroupId)?.string(forKey: "dilla-share-key"),
+           !shared.isEmpty {
+            return shared
+        }
+        return (Bundle.main.object(forInfoDictionaryKey: "DillaShortcutToken") as? String) ?? ""
     }
 
     private let card = UIView()

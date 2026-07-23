@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { supabase } from './supabase'
+import { ensureShareKey } from './shareKey'
 
 // Registers this device for push notifications and files the APNs token against
 // the signed-in user.
@@ -58,6 +59,13 @@ export function usePushRegistration(userId: string | undefined) {
     let cancelled = false
 
     void (async () => {
+      // Independent of push: the Share Extension needs this to import as the
+      // right user, so it must not be skipped when notifications are declined.
+      try {
+        await ensureShareKey(userId)
+      } catch (e) {
+        console.warn('[shareKey] setup failed', e)
+      }
       try {
         const token = await registerDevice(userId)
         if (!cancelled && token) console.info('[push] registered')
