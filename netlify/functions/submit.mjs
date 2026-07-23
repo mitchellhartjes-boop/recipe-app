@@ -15,6 +15,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { extractReel, extractWebPage, extractRecipeFromImage, resolvePinterestLink } from './_lib/extract.mjs'
+import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { coverImage } from './_lib/images.mjs'
 
 const CORS = {
@@ -295,15 +296,52 @@ export default async (req) => {
               return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
             }
           } catch {
-            /* unreadable linked page — handled by the message below */
+            /* unreadable linked page — recovery below gets a turn */
           }
         }
-        const who = r.source_author ? `@${r.source_author}'s` : "the creator's"
+
+        // No usable link in the caption ("recipe in my bio!"), or the linked page
+        // didn't pan out. Go to the creator's own blog and find the post: search
+        // their site for the dish, and only accept an unambiguous winner that
+        // carries a real recipe. Deterministic, free, and ~0.5-2s, which is why
+        // it runs here rather than on the worker.
+        const recovered = await recoverFromCreatorSite({
+          supabase,
+          handle: res.handle,
+          dish: r.title,
+          captionUrl: target,
+          captionDomain: r.creator_domain,
+        })
+        if (recovered.ok) {
+          const cover = await coverImage(supabase, {
+            srcUrl: recovered.recipe.image_url,
+            keyHint: recovered.recipe.title || r.title || 'recipe',
+          })
+          const record = toRecord(
+            { ...recovered.recipe, source_author: r.source_author ?? res.handle ?? null },
+            { url: recovered.url, sourcePlatform: 'web', sourceKind: 'link_in_bio', imageUrl: cover, model: 'json-ld' },
+          )
+          const { data, error } = await supabase.from('recipe_recipes').insert(record).select('id').single()
+          if (error) throw error
+          return json({
+            ok: true,
+            status: 'saved',
+            kind: 'link_in_bio',
+            recipe_id: data.id,
+            title: record.title,
+            image_url: record.image_url,
+            message: `Saved “${record.title}” — found it on ${recovered.domain}.`,
+          })
+        }
+
+        // Abstained on purpose. Saying WHY beats a generic failure, and saving a
+        // near-miss from the right creator would quietly corrupt the library.
+        const who = res.handle ? `@${res.handle}'s` : "the creator's"
         return json({
           ok: false,
           status: 'link_in_bio',
           kind: 'instagram',
-          message: `This recipe lives on ${who} blog, not in the caption. Open the link in the reel and share that web page to the app to save it.`,
+          message: `This recipe lives on ${who} blog and I couldn’t confirm which post it is (${recovered.reason}). Open the link in the reel and share that page instead.`,
         })
       }
       // Otherwise the recipe is in the video itself -> queue the video (Apify) path.

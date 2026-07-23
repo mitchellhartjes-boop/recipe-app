@@ -31,7 +31,7 @@ const EMBED_UA =
 export const instagramEmbedEnabled = () => process.env.INSTAGRAM_EMBED_ENABLED !== 'false'
 
 // Normal browser UA for fetching generic recipe pages.
-const WEB_UA =
+export const WEB_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 export function parseShortcode(url) {
@@ -120,6 +120,15 @@ export async function fetchCaption(url) {
   const html = await res.text()
   const text = htmlToText(html).slice(0, 8000)
   const imageUrl = (await fetchReelCover(html)) || extractOgImage(html)
+  // The creator's @handle, needed to find their blog when the caption only says
+  // "recipe in bio". Taken from the markup rather than from the model's
+  // source_author, which is a guess and often returns a person's real name
+  // ("bailey rhatigan") instead of the handle. Two independent patterns, both
+  // verified against live reels.
+  const handle =
+    /class="[^"]*UsernameText[^"]*">([A-Za-z0-9._]{2,30})</.exec(html)?.[1] ??
+    /instagram\.com\/([A-Za-z0-9._]{2,30})\/(?:\?|"|')/.exec(html)?.[1] ??
+    null
   const looksWalled = /log in|sign up to see/i.test(text) && text.length < 400
   // For private / audience-restricted / removed reels, Instagram serves anonymous requests a
   // "broken or removed" stub (or a login wall) instead of the caption. Detect that so callers can
@@ -127,7 +136,7 @@ export async function fetchCaption(url) {
   const WALL =
     /(this (?:photo|video) may be broken|post may have been removed|content isn'?t available|isn'?t available to everyone|page isn'?t available|log in to see|sign up to see this)/i
   const inaccessible = text.length < 40 || (WALL.test(text) && text.length < 700)
-  return { shortcode, embedUrl, text, imageUrl, looksWalled, inaccessible }
+  return { shortcode, embedUrl, text, imageUrl, handle, looksWalled, inaccessible }
 }
 
 // Shared JSON contract for all extractors (text + vision) so they return the
@@ -146,6 +155,9 @@ const SCHEMA_BLOCK = `Respond with ONLY a JSON object (no prose, no markdown cod
   "steps": [ string ],            // ordered instruction steps, cleaned of emoji clutter
   "tags": [ string ],             // lowercase, e.g. ["dinner","pasta","cajun"]
   "external_url": string|null,    // a recipe/blog URL if one appears (e.g. "recipe on my blog: ...")
+  "creator_domain": string|null,  // just the site's domain if the text names one WITHOUT a full URL
+                                  // (e.g. "full recipe on halfbakedharvest.com" -> "halfbakedharvest.com").
+                                  // Bare domain only, no scheme or path. null if none is named.
   "where_is_recipe": "caption"|"external_link"|"video"|"unknown",  // see below — drives how we fetch it
   "notes_for_user": string|null   // when found=false, a short reason, e.g. "Recipe is demonstrated in the video, not written in the caption"
 }
@@ -234,7 +246,7 @@ export async function extractRecipeFromImage({ base64, mediaType, apiKey }) {
 }
 
 export async function extractReel(url, { apiKey } = {}) {
-  const { embedUrl, text, imageUrl, looksWalled, inaccessible, shortcode, disabled } = await fetchCaption(url)
+  const { embedUrl, text, imageUrl, handle, looksWalled, inaccessible, shortcode, disabled } = await fetchCaption(url)
   if (inaccessible || looksWalled) {
     // Point the user at the screenshot path: it needs no third-party access at
     // all, and it reads restricted/age-gated reels the public embed can't.
@@ -255,7 +267,7 @@ export async function extractReel(url, { apiKey } = {}) {
     }
   }
   const { recipe, model, usage } = await extractRecipeFromText({ text, sourceUrl: url, apiKey })
-  return { source_platform: 'instagram', source_url: url, shortcode, embedUrl, imageUrl, captionChars: text.length, model, usage, recipe }
+  return { source_platform: 'instagram', source_url: url, shortcode, embedUrl, imageUrl, handle, captionChars: text.length, model, usage, recipe }
 }
 
 // Generic recipe web page: fetch -> JSON-LD + visible text -> Claude.
