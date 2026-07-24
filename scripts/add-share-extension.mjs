@@ -302,19 +302,54 @@ proj.parseSync()
 // pbxproj re-acquires it.
 {
   const unq = (s) => String(s ?? '').replace(/^"|"$/g, '')
+  const groups = proj.hash.project.objects.PBXGroup || {}
   const targets = proj.pbxNativeTargetSection()
   const appKey = Object.keys(targets).find((k) => unq(targets[k]?.name) === 'App')
-  const srcPhases = proj.hash.project.objects.PBXSourcesBuildPhase || {}
-  let present = false
-  for (const key of Object.keys(srcPhases)) {
-    const phase = srcPhases[key]
-    if (!phase || typeof phase !== 'object') continue
-    if ((phase.files || []).some((f) => String(f.comment ?? '').includes('SharedStorePlugin.swift'))) present = true
-  }
-  if (appKey && !present) {
-    proj.addSourceFile('SharedStorePlugin.swift', { target: appKey }, 'App')
+
+  // The App source group (path "App", the one holding AppDelegate.swift). The
+  // file reference MUST live inside it: a Swift file added to the top level gets
+  // sourceTree "<group>" with no parent path, which resolves to ios/App/<file>
+  // — one directory too high — and the build fails with "Build input file cannot
+  // be found". AppDelegate.swift resolves correctly precisely because it is a
+  // child of this group.
+  const appGroupKey = Object.keys(groups).find((gk) => {
+    const g = groups[gk]
+    return (
+      g && typeof g === 'object' && unq(g.path) === 'App' &&
+      (g.children || []).some((c) => String(c.comment ?? '').includes('AppDelegate.swift'))
+    )
+  })
+
+  const inSources = Object.values(proj.hash.project.objects.PBXSourcesBuildPhase || {}).some(
+    (ph) => ph && typeof ph === 'object' && (ph.files || []).some((f) => String(f.comment ?? '').includes('SharedStorePlugin.swift')),
+  )
+  const inAppGroup =
+    appGroupKey && (groups[appGroupKey].children || []).some((c) => String(c.comment ?? '').includes('SharedStorePlugin.swift'))
+
+  // Self-healing: only act when it is NOT already both compiled and correctly
+  // placed. addSourceFile is called WITHOUT a group (the third arg wants a group
+  // KEY, not the name 'App' — passing the name is what orphaned the reference),
+  // then the reference is attached to the App group explicitly so the path
+  // resolves to ios/App/App/SharedStorePlugin.swift.
+  if (appKey && !(inSources && inAppGroup)) {
+    let ref
+    if (!inSources) {
+      const file = proj.addSourceFile('SharedStorePlugin.swift', { target: appKey })
+      ref = file?.fileRef
+    }
+    if (appGroupKey && !inAppGroup) {
+      // Find the file reference uuid (from the add above, or an existing orphan).
+      if (!ref) {
+        const fileRefs = proj.hash.project.objects.PBXFileReference || {}
+        ref = Object.keys(fileRefs).find((k) => String(fileRefs[k]?.name ?? fileRefs[k]?.path ?? '').includes('SharedStorePlugin.swift'))
+      }
+      if (ref) {
+        groups[appGroupKey].children = groups[appGroupKey].children || []
+        groups[appGroupKey].children.push({ value: ref, comment: 'SharedStorePlugin.swift' })
+      }
+    }
     writeFileSync(projPath, proj.writeSync())
-    console.log('Added SharedStorePlugin.swift to the App target.')
+    console.log('Ensured SharedStorePlugin.swift is compiled and in the App group.')
   }
 }
 
