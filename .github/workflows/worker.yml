@@ -33,6 +33,13 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          # Service role so one worker drains every user's queue (RLS-scoped it
+          # would only see the owner's rows). Bypasses RLS — never client-side.
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # APNs push (token-based). The .p8 contents, its Key ID, and the Team ID.
+          APNS_KEY: ${{ secrets.APNS_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
           WORKER_RUN_ONCE: '1'
           WORKER_KINDS: link_in_bio,video,cover # video via Apify's direct URL; cover = backfill a caption reel's image via Apify
           FFMPEG_PATH: ffmpeg # from the apt-get install step above

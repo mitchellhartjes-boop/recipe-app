@@ -12,6 +12,7 @@ import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extr
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
 import { fetchReelViaApify } from '../netlify/functions/_lib/apify.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
+import { sendPush, apnsConfigured } from './lib/apns.mjs'
 
 dotenv.config({ path: ['.env', '.env.local'], quiet: true })
 
@@ -57,6 +58,35 @@ function toRecord(r, { url, sourcePlatform, sourceKind }) {
     notes: r.notes ?? null,
     status: 'saved',
     extraction_meta: { source_kind: sourceKind, confidence: r.confidence ?? null, recovered_notes: r.notes ?? r.notes_for_user ?? null },
+  }
+}
+
+// Tell the user how an async job turned out. This is the whole point of push:
+// by the time the worker finishes, minutes after the share, the app is suspended
+// and a local notification can't fire. Cover jobs are silent — they just backfill
+// an image on a recipe the user was already notified about.
+async function notifyJob(supabase, job, outcome) {
+  if (job.kind === 'cover' || !job.user_id || !apnsConfigured()) return
+  const { data: tokens } = await supabase.from('device_tokens').select('token').eq('user_id', job.user_id)
+  if (!tokens?.length) return
+
+  const content = outcome.ok
+    ? { title: 'Saved to Dilla', body: `“${outcome.title}” is in your library.`, data: { recipe_id: outcome.recipeId } }
+    : { title: 'Dilla couldn’t save that', body: outcome.message || 'That reel couldn’t be imported — try a screenshot.' }
+
+  for (const { token } of tokens) {
+    try {
+      const res = await sendPush(token, content)
+      // Prune tokens APNs says are gone, so a dead device isn't retried forever.
+      if (res.dead) {
+        await supabase.from('device_tokens').delete().eq('token', token)
+        console.log(`[job ${job.id}] pruned dead device token`)
+      } else if (!res.ok) {
+        console.warn(`[job ${job.id}] push failed: ${res.status} ${res.reason}`)
+      }
+    } catch (e) {
+      console.warn(`[job ${job.id}] push error: ${e.message}`)
+    }
   }
 }
 
@@ -142,6 +172,7 @@ async function processJob(supabase, job) {
   if (error) throw error
   await supabase.from('recipe_jobs').update({ status: 'done', recipe_id: data.id, error: null }).eq('id', job.id)
   console.log(`[job ${job.id}] done -> recipe ${data.id} ("${recipe.title}")`)
+  await notifyJob(supabase, job, { ok: true, title: recipe.title, recipeId: data.id })
 }
 
 async function main() {
@@ -196,6 +227,13 @@ async function main() {
       } catch (e) {
         console.error(`[job ${job.id}] FAILED:`, e.message)
         await supabase.from('recipe_jobs').update({ status: 'failed', error: String(e.message).slice(0, 500) }).eq('id', job.id)
+        // Tell the user it failed — they shared it and are waiting. Best-effort:
+        // a push problem must not mask the original job failure.
+        try {
+          await notifyJob(supabase, job, { ok: false, message: e.message })
+        } catch (pushErr) {
+          console.warn(`[job ${job.id}] failure-notify error: ${pushErr.message}`)
+        }
       }
     } catch (e) {
       console.error('poll error:', e.message)
