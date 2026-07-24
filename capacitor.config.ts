@@ -20,11 +20,17 @@ const config: CapacitorConfig = {
     // double-applies the insets and leaves dead bands top and bottom.
     // Requires viewport-fit=cover in index.html (already set) or env() reads 0.
     contentInset: 'never',
-    // Leave UNUserNotificationCenter.delegate to AppDelegate. Capacitor's bridge
-    // otherwise claims it and returns no presentation options for local
-    // notifications, which silently swallows the Share Extension's "Saved to
-    // Dilla" alert whenever the app happens to be frontmost. Safe to disable:
-    // no local/push notification plugin is installed, so nothing else needs it.
+    // Leave UNUserNotificationCenter.delegate to AppDelegate so its willPresent
+    // shows the Share Extension's "Saved to Dilla" alert when the app is
+    // frontmost (Capacitor's bridge otherwise claims the delegate and returns no
+    // presentation options, swallowing it).
+    //
+    // The catch: this ALSO stops Capacitor forwarding the remote-registration
+    // callbacks the @capacitor/push-notifications plugin needs, so the plugin
+    // never received a device token and push silently did nothing. AppDelegate
+    // now posts those callbacks itself (didRegisterForRemoteNotifications... ->
+    // Notification.Name.capacitorDidRegister...), which is the documented way to
+    // manage notifications yourself while still using the push plugin.
     handleApplicationNotifications: false,
   },
   plugins: {

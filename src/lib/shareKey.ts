@@ -71,6 +71,12 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
     device_label: navigator.userAgent.slice(0, 120),
   })
   if (error) {
+    // TEMPORARY: surface the real insert error to the device diagnostics table.
+    try {
+      await supabase.from('push_debug').insert({ step: 'sharekey-insert-error', detail: String(error.message).slice(0, 500) })
+    } catch {
+      /* best effort */
+    }
     console.warn('[shareKey] could not register key', error.message)
     return null
   }

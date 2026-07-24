@@ -80,6 +80,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
         completionHandler([.banner, .sound, .list])
     }
 
+    // handleApplicationNotifications is false (we own the UN delegate above), so
+    // Capacitor does NOT forward these to @capacitor/push-notifications. Post the
+    // notifications the plugin listens for ourselves — without this the plugin
+    // never gets a device token and every push is silently undeliverable.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
         // iOS relaunched us in the background because the share upload finished.
         // Stash the handler and touch the session so its events get delivered.

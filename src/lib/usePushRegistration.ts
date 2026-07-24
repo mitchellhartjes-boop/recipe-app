@@ -4,6 +4,17 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { supabase } from './supabase'
 import { ensureShareKey } from './shareKey'
 
+// TEMPORARY on-device diagnostics — the registration path fails silently on the
+// phone and the WebView console can't be read from Windows. Best-effort; never
+// throws. Remove once push registration is confirmed working.
+async function dbg(step: string, detail?: unknown) {
+  try {
+    await supabase.from('push_debug').insert({ step, detail: detail == null ? null : String(detail).slice(0, 500) })
+  } catch {
+    /* diagnostics must never affect the flow */
+  }
+}
+
 // Registers this device for push notifications and files the APNs token against
 // the signed-in user.
 //
@@ -25,8 +36,10 @@ async function registerDevice(userId: string) {
   // granted, which made this bail before ever calling register(): the device
   // token was never produced and the push had nothing to deliver to.
   let perm = await PushNotifications.checkPermissions()
+  await dbg('perm-check', perm.receive)
   if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
     perm = await PushNotifications.requestPermissions()
+    await dbg('perm-request', perm.receive)
   }
   // Register unless the user has explicitly said no. A provisional or full grant
   // is enough to obtain an APNs token — the token is about delivery capability,
@@ -69,6 +82,9 @@ async function registerDevice(userId: string) {
 
 export function usePushRegistration(userId: string | undefined) {
   useEffect(() => {
+    // Diagnostic: does the effect even reach here, and with what state? Runs
+    // regardless of the guard below so a false isNativePlatform is visible.
+    void dbg('effect', `native=${Capacitor.isNativePlatform()} userId=${userId ? 'set' : 'MISSING'}`)
     if (!Capacitor.isNativePlatform() || !userId) return
     let cancelled = false
 
@@ -76,16 +92,20 @@ export function usePushRegistration(userId: string | undefined) {
       // Independent of push: the Share Extension needs this to import as the
       // right user, so it must not be skipped when notifications are declined.
       try {
-        await ensureShareKey(userId)
+        const key = await ensureShareKey(userId)
+        await dbg('sharekey', key ? 'minted/ok' : 'returned null')
       } catch (e) {
+        await dbg('sharekey-throw', e)
         console.warn('[shareKey] setup failed', e)
       }
       try {
         const token = await registerDevice(userId)
+        await dbg('token', token ? 'got token' : 'no token')
         if (!cancelled && token) console.info('[push] registered')
       } catch (e) {
         // Never let a push failure break the app — it is an enhancement, and
         // the recipe still lands in the library either way.
+        await dbg('token-throw', e)
         console.warn('[push] registration failed', e)
       }
     })()
