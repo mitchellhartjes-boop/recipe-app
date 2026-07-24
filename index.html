@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- maximum-scale=1 + user-scalable=no lock the WebView to 1.0 scale. Without
+         them, a cold-start WKWebView (fresh install) sometimes computes its
+         layout width before its bounds settle and comes up ZOOMED IN — content
+         magnified, panning sideways — then corrects itself on the next launch
+         once the WebView is warm. Locking the scale stops it ever settling >1.
+         (Native app only respects these; mobile Safari ignores user-scalable,
+         which is fine — Safari doesn't have the cold-start bug.) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#faf8f5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
