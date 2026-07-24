@@ -256,6 +256,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
   }
 }
 
+// 0b. Export-compliance declaration. Without it, every TestFlight build stops on
+// "Missing Compliance" and has to be cleared by hand before testers can install
+// it. Dilla only uses standard HTTPS/TLS (exempt encryption), so declaring "no
+// non-exempt encryption" is accurate and skips the prompt for good.
+{
+  const appPlist = resolve(root, 'ios/App/App/Info.plist')
+  let plist = readFileSync(appPlist, 'utf8')
+  if (!plist.includes('ITSAppUsesNonExemptEncryption')) {
+    plist = plist.replace(
+      /<\/dict>\s*<\/plist>\s*$/,
+      `	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>
+`,
+    )
+    writeFileSync(appPlist, plist)
+    console.log('Added ITSAppUsesNonExemptEncryption=false to the app Info.plist.')
+  }
+}
+
 // 1. dilla:// URL scheme in the app Info.plist (deep links; harmless to keep).
 {
   const appPlist = resolve(root, 'ios/App/App/Info.plist')
