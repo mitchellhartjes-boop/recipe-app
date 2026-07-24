@@ -11,6 +11,7 @@ import Grocery from './pages/Grocery'
 import AddRecipe from './pages/AddRecipe'
 import ReviewRecipe from './pages/ReviewRecipe'
 import RecipeDetail from './pages/RecipeDetail'
+import Settings from './pages/Settings'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/add" element={<AddRecipe />} />
           <Route path="/review" element={<ReviewRecipe />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

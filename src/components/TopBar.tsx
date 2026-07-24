@@ -1,15 +1,13 @@
-import { type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
-import { useTheme } from '../lib/theme'
 import { categoryBySlug } from '../lib/categories'
-import { ChevronLeftIcon, SunIcon, MoonIcon } from './icons'
+import { ChevronLeftIcon, SettingsIcon } from './icons'
 
 function titleFor(path: string): string {
   if (path.startsWith('/add')) return 'Add recipe'
   if (path.startsWith('/review')) return 'Review & save'
   if (path.startsWith('/search')) return 'Search'
   if (path.startsWith('/grocery')) return 'Grocery list'
+  if (path.startsWith('/settings')) return 'Settings'
   if (path.startsWith('/c/')) {
     const slug = path.split('/')[2]
     if (slug === 'all') return 'All recipes'
@@ -19,21 +17,24 @@ function titleFor(path: string): string {
   return ''
 }
 
-function ThemeToggle({ className = '' }: { className?: string }) {
-  const { dark, toggle } = useTheme()
+// Gear → the settings page (theme, account, help all live there now). Hidden
+// when already on settings so it doesn't point at itself.
+function SettingsButton({ className = '' }: { className?: string }) {
+  const { pathname } = useLocation()
+  if (pathname.startsWith('/settings')) return null
   return (
-    <button
-      onClick={toggle}
+    <Link
+      to="/settings"
       className={`flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 hover:text-stone-700 active:scale-95 ${className}`}
-      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={dark ? 'Light mode' : 'Dark mode'}
+      aria-label="Settings"
+      title="Settings"
     >
-      {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
-    </button>
+      <SettingsIcon className="h-5 w-5" />
+    </Link>
   )
 }
 
-function DesktopLink({ to, end, children }: { to: string; end?: boolean; children: ReactNode }) {
+function DesktopLink({ to, end, children }: { to: string; end?: boolean; children: React.ReactNode }) {
   return (
     <NavLink
       to={to}
@@ -52,16 +53,10 @@ function DesktopLink({ to, end, children }: { to: string; end?: boolean; childre
 export default function TopBar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { signOut, session } = useAuth()
 
   const isHome = pathname === '/'
-  // Home + the other bottom-nav tabs are top-level (title + avatar, no back button).
+  // Home + the other bottom-nav tabs are top-level (title + settings, no back button).
   const isPrimary = isHome || pathname.startsWith('/search') || pathname.startsWith('/grocery')
-  const initial = (session?.user.email?.[0] ?? '?').toUpperCase()
-
-  function account() {
-    if (confirm('Sign out?')) void signOut()
-  }
 
   return (
     <header className="sticky top-0 z-20 w-full max-w-full border-b border-stone-200/70 bg-cream/80 pt-safe-t backdrop-blur">
@@ -77,16 +72,7 @@ export default function TopBar() {
             ) : (
               <span className="font-display text-lg font-semibold tracking-tight">{titleFor(pathname)}</span>
             )}
-            <div className="ml-auto flex items-center gap-1">
-              <ThemeToggle />
-              <button
-                onClick={account}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-paprika-50 text-sm font-semibold text-paprika-800 transition active:scale-95"
-                aria-label="Account"
-              >
-                {initial}
-              </button>
-            </div>
+            <SettingsButton className="ml-auto" />
           </>
         ) : (
           <div className="grid w-full grid-cols-[auto_1fr_auto] items-center">
@@ -98,7 +84,7 @@ export default function TopBar() {
               <ChevronLeftIcon className="h-6 w-6" />
             </button>
             <span className="text-center font-display text-base font-semibold tracking-tight">{titleFor(pathname)}</span>
-            <ThemeToggle className="justify-self-end" />
+            <SettingsButton className="justify-self-end" />
           </div>
         )}
       </div>
@@ -121,14 +107,7 @@ export default function TopBar() {
           >
             + Add recipe
           </Link>
-          <ThemeToggle className="ml-1" />
-          <button
-            onClick={() => void signOut()}
-            className="rounded-full px-3 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-700"
-            title={session?.user.email ?? 'Sign out'}
-          >
-            Sign out
-          </button>
+          <SettingsButton className="ml-1" />
         </nav>
       </div>
     </header>
