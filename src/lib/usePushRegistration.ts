@@ -18,13 +18,24 @@ import { ensureShareKey } from './shareKey'
 
 /** Ask, register, and store — returns the token so callers can log/debug. */
 async function registerDevice(userId: string) {
-  // requestPermissions returns the CURRENT state when already decided, so this
-  // is safe to call on every launch: iOS only prompts while undetermined.
-  const perm = await PushNotifications.requestPermissions()
-  if (perm.receive !== 'granted') return null
+  // Gate on checkPermissions, NOT requestPermissions. The AppDelegate can grant
+  // PROVISIONAL authorization (quiet notifications, no prompt) — and while
+  // checkPermissions maps provisional to 'granted', requestPermissions re-asks
+  // for full authorization and reports the still-provisional state as NOT
+  // granted, which made this bail before ever calling register(): the device
+  // token was never produced and the push had nothing to deliver to.
+  let perm = await PushNotifications.checkPermissions()
+  if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
+    perm = await PushNotifications.requestPermissions()
+  }
+  // Register unless the user has explicitly said no. A provisional or full grant
+  // is enough to obtain an APNs token — the token is about delivery capability,
+  // separate from whether alerts are shown loudly.
+  if (perm.receive === 'denied') return null
 
   // Resolve the token via the one-shot listener rather than a return value —
-  // register() only kicks off APNs registration; the token arrives async.
+  // register() only kicks off APNs registration; the token arrives async. Attach
+  // the listeners BEFORE register() so a fast token can't fire before we listen.
   const token = await new Promise<string | null>((resolve) => {
     let settled = false
     const done = (value: string | null) => {
@@ -32,9 +43,12 @@ async function registerDevice(userId: string) {
       settled = true
       resolve(value)
     }
-    void PushNotifications.addListener('registration', (t) => done(t.value))
-    void PushNotifications.addListener('registrationError', () => done(null))
-    void PushNotifications.register()
+    Promise.all([
+      PushNotifications.addListener('registration', (t) => done(t.value)),
+      PushNotifications.addListener('registrationError', () => done(null)),
+    ])
+      .then(() => PushNotifications.register())
+      .catch(() => done(null))
     // APNs can be slow or silent (airplane mode, no APNs reachability). Give up
     // rather than leaving the promise dangling for the life of the session.
     setTimeout(() => done(null), 15_000)
