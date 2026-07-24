@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CATEGORIES, type Category } from './categories'
 import { apiUrl } from './api'
+import { supabase } from './supabase'
+import { useAuth } from './auth'
 
 const KEY = 'dilla-category-prefs'
 
@@ -86,11 +88,63 @@ export function makeCustomCategory(label: string, emoji: string): CustomCategory
 }
 
 export function useCategoryPrefs() {
+  const { session } = useAuth()
+  const userId = session?.user?.id
   const [prefs, setPrefs] = useState<Prefs>(load)
+  // Gate DB writes until the account's saved prefs have loaded. Without this, a
+  // fresh device (empty localStorage → defaults) would immediately write those
+  // defaults to the account and wipe the categories saved from another device.
+  const [hydrated, setHydrated] = useState(false)
+  const hydratedRef = useRef(false)
 
+  // Load the account's saved categories once, and let them win over whatever
+  // localStorage happens to hold on this device.
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('recipe_category_prefs')
+          .select('visible, custom')
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (cancelled) return
+        if (data) {
+          setPrefs({
+            visible: Array.isArray(data.visible) && data.visible.length ? data.visible : DEFAULT_VISIBLE,
+            custom: Array.isArray(data.custom) ? (data.custom as CustomCategory[]) : [],
+          })
+        }
+      } catch {
+        /* offline / first run — keep the local copy and let it sync up */
+      } finally {
+        if (!cancelled) {
+          hydratedRef.current = true
+          setHydrated(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  // Persist every change: localStorage always (instant + offline), and the
+  // account once hydrated (so the row exists on first use, and follows edits).
   useEffect(() => {
     save(prefs)
-  }, [prefs])
+    if (!hydratedRef.current || !userId) return
+    void supabase
+      .from('recipe_category_prefs')
+      .upsert(
+        { user_id: userId, visible: prefs.visible, custom: prefs.custom, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      )
+      .then(({ error }) => {
+        if (error) console.warn('[categories] could not save to account', error.message)
+      })
+  }, [prefs, userId, hydrated])
 
   // Every category the user could show: the built-ins plus their own.
   const all: Category[] = [...CATEGORIES, ...prefs.custom]

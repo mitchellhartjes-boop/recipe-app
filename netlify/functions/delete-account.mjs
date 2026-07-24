@@ -22,7 +22,15 @@ const json = (body, status = 200) =>
 // Every table that holds per-user rows. Purged explicitly rather than trusting
 // FK cascades, which aren't declared uniformly across these tables — an account
 // deletion that silently leaves data behind is exactly what must not happen.
-const USER_TABLES = ['device_tokens', 'share_keys', 'recipe_jobs', 'recipe_grocery_items', 'recipe_meal_plan', 'recipe_recipes']
+const USER_TABLES = [
+  'device_tokens',
+  'share_keys',
+  'recipe_jobs',
+  'recipe_grocery_items',
+  'recipe_meal_plan',
+  'recipe_category_prefs',
+  'recipe_recipes',
+]
 const IMAGE_BUCKET = process.env.RECIPE_IMAGE_BUCKET || 'recipe-images'
 
 export default async (req) => {

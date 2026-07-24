@@ -52,14 +52,15 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <CheckIcon className="h-8 w-8" />,
-    title: 'If a reel won’t import',
+    title: 'Recipe’s in the video? Still works',
     body: (
       <>
-        Some posts hide the recipe in the video, or are age-restricted so no app can read them.
+        Even when a reel never writes the recipe in the caption — it’s just spoken and shown in the
+        video — Dilla watches and listens to it and writes the recipe out for you.
         <br />
         <br />
-        The fix: <b>screenshot the recipe</b> and share the image to Dilla instead. It reads
-        screenshots just as well — that works for any post.
+        The only ones it can’t reach are private or age-restricted posts. For those, <b>screenshot
+        the recipe</b> and share the image instead — that works for anything you can see.
       </>
     ),
   },
