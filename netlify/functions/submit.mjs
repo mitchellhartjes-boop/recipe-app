@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js'
 import { extractReel, extractWebPage, extractRecipeFromImage, resolvePinterestLink } from './_lib/extract.mjs'
 import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { coverImage } from './_lib/images.mjs'
+import { adminClient as usageAdmin, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -282,8 +283,25 @@ export default async (req) => {
   }
   const userId = caller.userId
 
+  // --- monthly import cap ---
+  // Claimed BEFORE any paid work so a burst of parallel shares can't run up a
+  // bill past the cap, and released again if nothing gets saved. The kind is
+  // provisional: an Instagram link is assumed to be a cheap caption import and
+  // is re-classified below if it turns out to need the expensive video path.
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return json({ ok: false, message: 'Server is missing ANTHROPIC_API_KEY' }, 500)
+
+  const meterAdmin = usageAdmin()
+  const img = getImage(body, urlObj)
+  let chargedKind = img ? 'screenshot' : 'web'
+  let keepCharge = false
+  const reservation = await reserveImport(meterAdmin, userId, chargedKind)
+  if (!reservation.allowed) {
+    return json({ ok: false, status: 'limit_reached', kind: 'limit', message: limitMessage(reservation) }, 200)
+  }
+  const releaseIfUnused = async () => {
+    if (reservation.metered && !keepCharge) await refundImport(meterAdmin, userId, chargedKind)
+  }
 
   // --- screenshot / photo path (no URL) ---
   // The way to capture audience-restricted or age-gated reels (e.g. cocktails):
@@ -291,7 +309,6 @@ export default async (req) => {
   // vision reads the recipe; the screenshot is NOT used as the cover (it's full
   // of app chrome). No cover is set — the app shows its designed gradient +
   // emoji card until the user adds their own photo.
-  const img = getImage(body, urlObj)
   if (img) {
     try {
       const supabase = caller.supabase
@@ -307,9 +324,12 @@ export default async (req) => {
       const record = toRecord(r, { url: null, sourcePlatform: 'instagram', sourceKind: 'screenshot', imageUrl: null, model })
       const { data, error } = await insertRecipe(supabase, userId, record)
       if (error) throw error
+      keepCharge = true
       return json({ ok: true, status: 'saved', kind: 'screenshot', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” from your screenshot.` })
     } catch (e) {
       return json({ ok: false, message: e?.message || 'Could not read the screenshot.' }, 502)
+    } finally {
+      await releaseIfUnused()
     }
   }
 
@@ -318,6 +338,7 @@ export default async (req) => {
     (body && (body.url ?? body.text ?? body.shared)) || rawText || urlObj.searchParams.get('url') || ''
   const link = firstUrl(rawInput) || (typeof rawInput === 'string' ? rawInput.trim() : '')
   if (!link || !/^https?:\/\//i.test(link)) {
+    await releaseIfUnused()
     return json({ ok: false, message: 'No valid link was shared.' }, 400)
   }
 
@@ -335,6 +356,7 @@ export default async (req) => {
         const { data, error } = await insertRecipe(supabase, userId, record)
         if (error) throw error
         await insertJob(supabase, userId, { url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        keepCharge = true
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: null, message: `Saved “${record.title}” to your library.` })
       }
       // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
@@ -368,6 +390,7 @@ export default async (req) => {
               const record = toRecord(web.recipe, { url: target, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
               const { data, error } = await insertRecipe(supabase, userId, record)
               if (error) throw error
+              keepCharge = true
               return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
             }
           } catch {
@@ -398,6 +421,7 @@ export default async (req) => {
           )
           const { data, error } = await insertRecipe(supabase, userId, record)
           if (error) throw error
+          keepCharge = true
           return json({
             ok: true,
             status: 'saved',
@@ -420,8 +444,24 @@ export default async (req) => {
         })
       }
       // Otherwise the recipe is in the video itself -> queue the video (Apify) path.
+      //
+      // Re-charge as 'video' first. This is the one genuinely expensive kind
+      // (download + transcribe + vision, ~3-5c against well under a cent for the
+      // rest), so it carries its own sub-cap — and we only learn a reel needs it
+      // here, after the caption came back empty. Swap the provisional cheap slot
+      // for a video one; if the video allowance is gone, nothing is queued.
+      if (reservation.metered) {
+        await refundImport(meterAdmin, userId, chargedKind)
+        const videoRes = await reserveImport(meterAdmin, userId, 'video')
+        if (!videoRes.allowed) {
+          keepCharge = true // nothing left reserved to release
+          return json({ ok: false, status: 'limit_reached', kind: 'limit', message: limitMessage(videoRes) })
+        }
+        chargedKind = 'video'
+      }
       const { data, error } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: {} })
       if (error) throw error
+      keepCharge = true
       return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
     }
 
@@ -470,6 +510,7 @@ export default async (req) => {
       const record = toRecord(res.recipe, { url: pageUrl, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: res.model })
       const { data, error } = await insertRecipe(supabase, userId, record)
       if (error) throw error
+      keepCharge = true
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }
     // The page loaded but carried no recipe. Other JS-only shells (TikTok,
@@ -484,5 +525,9 @@ export default async (req) => {
     })
   } catch (e) {
     return json({ ok: false, message: e?.message || 'Something went wrong.' }, 502)
+  } finally {
+    // Any path that didn't actually save or queue something hands its slot back,
+    // including thrown errors — a failed import shouldn't cost the user quota.
+    await releaseIfUnused()
   }
 }

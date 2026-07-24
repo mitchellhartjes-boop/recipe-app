@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
@@ -25,6 +25,8 @@ function HowTo({ source, children }: { source: string; children: React.ReactNode
   )
 }
 
+const PLAN_LIMITS: Record<string, number> = { free: 20, pro: 200 }
+
 export default function Settings() {
   const navigate = useNavigate()
   const { session, signOut } = useAuth()
@@ -32,8 +34,29 @@ export default function Settings() {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [usage, setUsage] = useState<{ plan: string; used: number; limit: number } | null>(null)
 
   const email = session?.user.email ?? ''
+  const userId = session?.user.id
+
+  // This month's imports, so hitting the cap is never a surprise.
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    void (async () => {
+      const period = new Date().toISOString().slice(0, 7) // YYYY-MM (UTC), matches the server
+      const [{ data: prof }, { data: use }] = await Promise.all([
+        supabase.from('recipe_profiles').select('plan').eq('user_id', userId).maybeSingle(),
+        supabase.from('recipe_usage').select('imports').eq('user_id', userId).eq('period', period).maybeSingle(),
+      ])
+      if (cancelled) return
+      const plan = prof?.plan ?? 'free'
+      setUsage({ plan, used: use?.imports ?? 0, limit: PLAN_LIMITS[plan] ?? PLAN_LIMITS.free })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
   async function deleteAccount() {
     setDeleting(true)
@@ -76,6 +99,30 @@ export default function Settings() {
           </span>
         </button>
       </Section>
+
+      {usage && (
+        <Section title="Plan">
+          <div className="px-4 py-3.5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-medium text-ink">{usage.plan === 'pro' ? 'Pro' : 'Free'}</span>
+              <span className="text-xs text-stone-500">
+                {usage.used} of {usage.limit} recipes this month
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200">
+              <div
+                className={`h-full rounded-full transition-all ${usage.used >= usage.limit ? 'bg-red-500' : 'bg-paprika-600'}`}
+                style={{ width: `${Math.min(100, (usage.used / Math.max(usage.limit, 1)) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-stone-500">
+              {usage.used >= usage.limit
+                ? 'You’ve used this month’s recipes — the count resets on the 1st.'
+                : `${usage.limit - usage.used} left until the 1st of next month.`}
+            </p>
+          </div>
+        </Section>
+      )}
 
       <Section title="How to use Dilla">
         <HowTo source="Instagram reel or post">

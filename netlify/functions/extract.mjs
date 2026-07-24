@@ -4,6 +4,7 @@
 // reason so the client can route them.
 import { extractReel, extractWebPage } from './_lib/extract.mjs'
 import { rehostImage, appClient } from './_lib/images.mjs'
+import { adminClient as usageAdmin, userFromJwt, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -60,12 +61,26 @@ export default async (req) => {
   }
   if (!url || typeof url !== 'string') return json({ error: 'Missing "url" in body' }, 400)
 
+  // --- who is asking, and do they have budget left ---
+  // This endpoint spends Anthropic credit on every call, so it is signed-in only
+  // (it used to be open to anyone who found the URL) and metered like the share
+  // path. The slot is released below if no recipe actually comes back.
+  const userId = await userFromJwt(req)
+  if (!userId) return json({ error: 'Please sign in to import recipes.' }, 401)
+  const meterAdmin = usageAdmin()
+  const reservation = await reserveImport(meterAdmin, userId, 'web')
+  if (!reservation.allowed) {
+    return json({ ok: false, reason: 'limit_reached', message: limitMessage(reservation) })
+  }
+  let keepCharge = false
+
   try {
     if (isInstagram(url)) {
       const res = await extractReel(url, { apiKey })
       const r = res.recipe
       if (r.found) {
         const cover = await rehostImage(await appClient(), res.imageUrl, r.title || 'reel')
+        keepCharge = true
         return json({
           ok: true,
           source_kind: 'caption',
@@ -89,6 +104,7 @@ export default async (req) => {
           const web = await extractWebPage({ url: r.external_url, apiKey })
           if (web.recipe.found) {
             const cover = await rehostImage(await appClient(), web.imageUrl, web.recipe.title || r.title || 'recipe')
+            keepCharge = true
             return json({
               ok: true,
               source_kind: 'web',
@@ -117,6 +133,7 @@ export default async (req) => {
     const res = await extractWebPage({ url, apiKey })
     if (res.recipe.found) {
       const cover = await rehostImage(await appClient(), res.imageUrl, res.recipe.title || 'recipe')
+      keepCharge = true
       return json({
         ok: true,
         source_kind: 'web',
@@ -131,5 +148,10 @@ export default async (req) => {
     })
   } catch (e) {
     return json({ error: e?.message || 'Extraction failed' }, 502)
+  } finally {
+    // No draft came back (or it threw) — hand the slot back rather than charging
+    // for a failed import. Note the user is charged at EXTRACT time, not at save:
+    // the money is spent here, and abandoning the review screen still cost it.
+    if (reservation.metered && !keepCharge) await refundImport(meterAdmin, userId, 'web')
   }
 }

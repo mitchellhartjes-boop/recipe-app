@@ -38,10 +38,17 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 export const apiUrl = (path: string) => `${API_BASE}${path}`
 
 // Synchronous fast-path extraction (Instagram caption + recipe websites).
+// Sends the session token: extraction costs money on every call, so the endpoint
+// only serves signed-in users and meters the request against their monthly cap.
 export async function extractRecipe(url: string): Promise<ExtractResult> {
+  const { data: sess } = await supabase.auth.getSession()
+  const token = sess.session?.access_token
   const res = await fetch(apiUrl('/.netlify/functions/extract'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ url }),
   })
   const body = (await res.json().catch(() => null)) as (ExtractResult & { error?: string }) | null
@@ -61,6 +68,13 @@ export async function createJob(
     .insert({ url, kind, meta })
     .select('id')
     .single()
-  if (error) throw error
+  if (error) {
+    // A database trigger meters slow jobs (they're the expensive ones), so this
+    // is the one error worth translating — otherwise the user sees raw SQL.
+    if (/IMPORT_LIMIT_REACHED/.test(error.message)) {
+      throw new Error("You've used all of this month's recipe imports. The count resets on the 1st.")
+    }
+    throw error
+  }
   return data.id as string
 }
