@@ -20,8 +20,9 @@
 // the owner's account, so older installs and the original Shortcut keep working.
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { extractReel, extractWebPage, extractRecipeFromImage, resolvePinterestLink } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromImage, extractRecipeFromText, resolvePinterestLink } from './_lib/extract.mjs'
 import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
+import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { coverImage } from './_lib/images.mjs'
 import { adminClient as usageAdmin, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
 
@@ -345,6 +346,67 @@ export default async (req) => {
   try {
     const supabase = caller.supabase
 
+    if (isTikTokUrl(link)) {
+      // Caption-first, like Instagram — except TikTok's caption very often IS
+      // the complete recipe, and it comes from the documented oEmbed API for
+      // free. fetchTikTokPost also expands the vm.tiktok.com short links the
+      // iOS share sheet produces.
+      const post = await fetchTikTokPost(link)
+      if (post.inaccessible) {
+        return json({
+          ok: false,
+          status: 'inaccessible',
+          kind: 'tiktok',
+          message: "Couldn't read this TikTok — it looks private or removed. Screenshot the recipe and share the image instead.",
+        })
+      }
+      const { recipe: r, model } = await extractRecipeFromText({ text: post.caption, sourceUrl: post.canonicalUrl, apiKey })
+      if (r.found) {
+        const cover = await coverImage(supabase, { srcUrl: post.imageUrl, keyHint: r.title || 'tiktok' })
+        const record = toRecord(
+          { ...r, source_author: r.source_author ?? post.author },
+          { url: post.canonicalUrl, sourcePlatform: 'tiktok', sourceKind: 'caption', imageUrl: cover, model },
+        )
+        const { data, error } = await insertRecipe(supabase, userId, record)
+        if (error) throw error
+        keepCharge = true
+        return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+      }
+      // Caption points at a blog? Cheap fetch before committing to the video path.
+      const external = normalizeUrl(r.external_url)
+      if (external) {
+        try {
+          const web = await extractWebPage({ url: external, apiKey })
+          if (web.recipe.found) {
+            const cover = await coverImage(supabase, { srcUrl: web.imageUrl, keyHint: web.recipe.title || r.title || 'recipe' })
+            const record = toRecord(web.recipe, { url: external, sourcePlatform: 'web', sourceKind: 'web', imageUrl: cover, model: web.model })
+            const { data, error } = await insertRecipe(supabase, userId, record)
+            if (error) throw error
+            keepCharge = true
+            return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
+          }
+        } catch {
+          /* unreadable page — the video itself is still worth a shot below */
+        }
+      }
+      // Recipe's demonstrated in the video -> the worker watches it. Swap the
+      // provisional cheap slot for a video one, exactly like the Instagram path:
+      // video is the expensive kind and carries its own sub-cap.
+      if (reservation.metered) {
+        await refundImport(meterAdmin, userId, chargedKind)
+        const videoRes = await reserveImport(meterAdmin, userId, 'video')
+        if (!videoRes.allowed) {
+          keepCharge = true // nothing left reserved to release
+          return json({ ok: false, status: 'limit_reached', kind: 'limit', message: limitMessage(videoRes) })
+        }
+        chargedKind = 'video'
+      }
+      const { data, error } = await insertJob(supabase, userId, { url: post.canonicalUrl, kind: 'video', meta: {} })
+      if (error) throw error
+      keepCharge = true
+      return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
+    }
+
     if (isInstagram(link)) {
       const res = await extractReel(link, { apiKey })
       const r = res.recipe
@@ -513,9 +575,9 @@ export default async (req) => {
       keepCharge = true
       return json({ ok: true, status: 'saved', kind: 'web', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
     }
-    // The page loaded but carried no recipe. Other JS-only shells (TikTok,
-    // Facebook) land here; Pinterest is answered earlier, before the fetch.
-    const jsOnlySite = /tiktok\.|facebook\./i.test(host ?? '')
+    // The page loaded but carried no recipe. Other JS-only shells (Facebook)
+    // land here; Pinterest and TikTok are answered earlier, before the fetch.
+    const jsOnlySite = /facebook\./i.test(host ?? '')
     return json({
       ok: false,
       status: 'no_recipe',

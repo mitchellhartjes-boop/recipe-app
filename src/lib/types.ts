@@ -6,7 +6,7 @@ export type Ingredient = {
   section?: string // optional group label, e.g. "Dressing" / "Salad" (multi-part recipes)
 }
 
-export type SourcePlatform = 'instagram' | 'web' | 'pinterest' | 'manual'
+export type SourcePlatform = 'instagram' | 'tiktok' | 'web' | 'pinterest' | 'manual'
 
 export type Recipe = {
   id: string

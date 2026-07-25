@@ -24,8 +24,8 @@ const SLIDES: Slide[] = [
     title: 'Send a recipe from anywhere',
     body: (
       <>
-        Found a recipe on <b>Instagram</b>, <b>Pinterest</b>, or a food blog? Tap that app's{' '}
-        <b>Share</b> button, then choose <b>Dilla</b> from the share sheet.
+        Found a recipe on <b>Instagram</b>, <b>TikTok</b>, <b>Pinterest</b>, or a food blog? Tap
+        that app's <b>Share</b> button, then choose <b>Dilla</b> from the share sheet.
         <br />
         <br />
         You stay right where you are — Dilla saves it in the background and sends you a{' '}

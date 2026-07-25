@@ -5,7 +5,8 @@ import { promisify } from 'node:util'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
-import { fetchReelViaApify } from '../../netlify/functions/_lib/apify.mjs'
+import { fetchReelViaApify, fetchTikTokViaApify } from '../../netlify/functions/_lib/apify.mjs'
+import { isTikTokUrl, vttToText } from '../../netlify/functions/_lib/tiktok.mjs'
 
 const execFileP = promisify(execFile)
 
@@ -67,9 +68,10 @@ async function downloadToFile(url, dest) {
 }
 
 // Shared core: a downloaded video file + its caption -> ffmpeg (audio + frames) -> Groq + Claude.
-async function processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames }) {
-  let transcript = ''
-  if (groqKey) {
+// A pre-supplied `transcript` (e.g. TikTok's own subtitles) skips the audio
+// extraction and the paid transcription call entirely.
+async function processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames, transcript = '' }) {
+  if (!transcript && groqKey) {
     const audioPath = path.join(workdir, 'audio.mp3')
     await execFileP(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-i', videoPath, '-vn', '-ac', '1', '-ar', '16000', audioPath], {
       maxBuffer: 10 * 1024 * 1024,
@@ -117,17 +119,38 @@ async function processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, w
 const DEFAULT_MODEL = process.env.VISION_MODEL || 'claude-sonnet-4-6'
 const DEFAULT_GROQ_MODEL = process.env.GROQ_MODEL || 'whisper-large-v3-turbo'
 
-// Always-on path (default): Apify reads the reel (handles IG access) and returns a direct video
-// URL + caption + cover image; we download the URL and run the shared pipeline. Works on the cloud
-// worker — no PC, no yt-dlp, no datacenter-IP block. Throws a clear error for restricted reels.
+// Always-on path (default): Apify reads the post (handles platform access) and returns a direct
+// video URL + caption + cover image; we download the URL and run the shared pipeline. Works on the
+// cloud worker — no PC, no yt-dlp, no datacenter-IP block. Throws a clear error for restricted
+// posts. Routes by platform: Instagram reels and TikToks share everything past the fetch.
 export async function extractVideoViaApify({ url, apifyToken, apiKey, groqKey, ffmpeg, workdir, model = DEFAULT_MODEL, groqModel = DEFAULT_GROQ_MODEL, maxFrames = 16 }) {
   await rm(workdir, { recursive: true, force: true })
   await mkdir(workdir, { recursive: true })
-  const { caption, videoUrl, imageUrl, author } = await fetchReelViaApify(url, apifyToken)
-  if (!videoUrl) throw new Error('Apify returned no video for this reel (it may be a photo post or restricted).')
+
+  let fetched
+  let transcript = ''
+  if (isTikTokUrl(url)) {
+    fetched = await fetchTikTokViaApify(url, apifyToken)
+    // TikTok ships its own WebVTT subtitles — a free transcript, so the paid
+    // transcription pass is skipped. Frames + vision still run: TikTok recipes
+    // put amounts in on-screen text at least as often as in speech.
+    if (fetched.subtitleUrl) {
+      try {
+        const res = await fetch(fetched.subtitleUrl)
+        if (res.ok) transcript = vttToText(await res.text())
+      } catch {
+        /* no subtitles — processVideoFile falls back to Groq on the audio */
+      }
+    }
+  } else {
+    fetched = await fetchReelViaApify(url, apifyToken)
+  }
+
+  const { caption, videoUrl, imageUrl, author } = fetched
+  if (!videoUrl) throw new Error('Apify returned no video for this post (it may be a photo post or restricted).')
   const videoPath = path.join(workdir, 'video.mp4')
   await downloadToFile(videoUrl, videoPath)
-  const out = await processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames })
+  const out = await processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, workdir, model, groqModel, maxFrames, transcript })
   return { ...out, imageUrl, author }
 }
 

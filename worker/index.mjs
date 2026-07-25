@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js'
 import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
 import { fetchReelViaApify } from '../netlify/functions/_lib/apify.mjs'
+import { isTikTokUrl } from '../netlify/functions/_lib/tiktok.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
 import { sendPush, apnsConfigured } from './lib/apns.mjs'
 
@@ -133,7 +134,7 @@ async function processJob(supabase, job) {
       workdir: path.join(TOOLS, 'work', job.id),
     })
     if (!r.found) throw new Error(r.notes || 'No recipe found in the video')
-    recipe = toRecord(r, { url: job.url, sourcePlatform: 'instagram', sourceKind: 'video' })
+    recipe = toRecord(r, { url: job.url, sourcePlatform: isTikTokUrl(job.url) ? 'tiktok' : 'instagram', sourceKind: 'video' })
     if (!recipe.source_author && author) recipe.source_author = author
     coverHint = imageUrl
   } else if (job.kind === 'link_in_bio') {

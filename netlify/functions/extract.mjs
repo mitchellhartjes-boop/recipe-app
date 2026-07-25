@@ -2,7 +2,8 @@
 // POST { url } -> { ok: true, source_kind, recipe } | { ok: false, reason, message, draft }
 // Slow paths (link-in-bio web_search, video) are handled async elsewhere — this returns a
 // reason so the client can route them.
-import { extractReel, extractWebPage } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromText } from './_lib/extract.mjs'
+import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { rehostImage, appClient } from './_lib/images.mjs'
 import { adminClient as usageAdmin, userFromJwt, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
 
@@ -75,6 +76,39 @@ export default async (req) => {
   let keepCharge = false
 
   try {
+    if (isTikTokUrl(url)) {
+      // Caption-first, exactly like Instagram — except TikTok's caption very
+      // often IS the whole recipe, read for free from the documented oEmbed API.
+      const post = await fetchTikTokPost(url)
+      if (post.inaccessible) {
+        return json({
+          ok: false,
+          reason: 'inaccessible',
+          message: "Couldn't read this TikTok — it looks private or removed. Screenshot the recipe and share the image instead.",
+          draft: toDraft({ recipe: {}, sourceUrl: post.canonicalUrl, sourcePlatform: 'tiktok', sourceKind: 'manual', model: null, imageUrl: null }),
+        })
+      }
+      const { recipe: r, model } = await extractRecipeFromText({ text: post.caption, sourceUrl: post.canonicalUrl, apiKey })
+      const withAuthor = { ...r, source_author: r.source_author ?? post.author }
+      if (r.found) {
+        const cover = await rehostImage(await appClient(), post.imageUrl, r.title || 'tiktok')
+        keepCharge = true
+        return json({
+          ok: true,
+          source_kind: 'caption',
+          recipe: toDraft({ recipe: withAuthor, sourceUrl: post.canonicalUrl, sourcePlatform: 'tiktok', sourceKind: 'caption', model, imageUrl: cover || post.imageUrl }),
+        })
+      }
+      // No recipe in the caption -> it's demonstrated in the video. The client
+      // queues a video job off this reason, same as Instagram.
+      return json({
+        ok: false,
+        reason: 'video_only',
+        message: r.notes_for_user || "No recipe in the caption — this one's in the video.",
+        draft: toDraft({ recipe: withAuthor, sourceUrl: post.canonicalUrl, sourcePlatform: 'tiktok', sourceKind: 'manual', model, imageUrl: post.imageUrl }),
+      })
+    }
+
     if (isInstagram(url)) {
       const res = await extractReel(url, { apiKey })
       const r = res.recipe

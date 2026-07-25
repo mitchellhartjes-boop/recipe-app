@@ -15,11 +15,13 @@ function hostOf(url: string): string | null {
   }
 }
 
+const HANDLE_PLATFORMS = new Set(['instagram', 'tiktok'])
+
 function label(recipe: Recipe): string {
   if (recipe.source_author) {
     const a = recipe.source_author.trim()
-    // Instagram handles read better with the @; site names don't.
-    return recipe.source_platform === 'instagram' && !a.startsWith('@') ? `@${a}` : a
+    // Social handles read better with the @; site names don't.
+    return HANDLE_PLATFORMS.has(recipe.source_platform ?? '') && !a.startsWith('@') ? `@${a}` : a
   }
   return (recipe.source_url && hostOf(recipe.source_url)) || 'original post'
 }
@@ -29,7 +31,12 @@ export default function SourceCredit({ recipe, compact = false }: { recipe: Reci
   if (!hasSource) return null
 
   const text = label(recipe)
-  const via = recipe.source_platform === 'instagram' ? 'Instagram' : hostOf(recipe.source_url ?? '') || 'the web'
+  const via =
+    recipe.source_platform === 'instagram'
+      ? 'Instagram'
+      : recipe.source_platform === 'tiktok'
+        ? 'TikTok'
+        : hostOf(recipe.source_url ?? '') || 'the web'
 
   if (compact) {
     return recipe.source_url ? (

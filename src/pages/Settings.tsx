@@ -125,10 +125,10 @@ export default function Settings() {
       )}
 
       <Section title="How to use Dilla">
-        <HowTo source="Instagram reel or post">
-          Tap <b>Share</b> → <b>Dilla</b>. It reads the caption, and if the recipe is “link in bio” or
-          in the video, it fetches that too — you just stay in Instagram and get a notification when
-          it lands.
+        <HowTo source="Instagram or TikTok">
+          Tap <b>Share</b> → <b>Dilla</b>. It reads the caption, and if the recipe is “link in bio”
+          or only in the video, it fetches that too — you stay right where you are and get a
+          notification when it lands.
         </HowTo>
         <HowTo source="Pinterest">
           Open the pin, tap <b>Share</b> → <b>Dilla</b>. Dilla follows the pin through to the recipe’s
