@@ -1,8 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
+type Mode = 'signin' | 'signup' | 'forgot'
+
+// Where the password-reset email should land. On the web this origin is the
+// site itself; in the native app the origin is capacitor://localhost, which an
+// email link can never open — so fall back to the deployed web app, where the
+// user resets and then signs in on their phone with the new password.
+const RESET_REDIRECT = `${import.meta.env.VITE_API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')}/reset`
+
 export default function Login() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -18,10 +26,16 @@ export default function Login() {
       if (mode === 'signin') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-      } else {
+      } else if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         if (!data.session) setNotice('Check your email to confirm your account, then sign in.')
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: RESET_REDIRECT })
+        if (error) throw error
+        // Same message whether or not the account exists — a different reply
+        // for known emails would let anyone probe who has an account.
+        setNotice('If that email has an account, a reset link is on its way. Open it and choose a new password.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -30,19 +44,24 @@ export default function Login() {
     }
   }
 
-  function toggleMode() {
-    setMode(mode === 'signin' ? 'signup' : 'signin')
+  function switchMode(next: Mode) {
+    setMode(next)
     setError(null)
     setNotice(null)
   }
+
+  const title = mode === 'forgot' ? 'Reset your password' : 'Dilla'
+  const cta = busy ? 'One moment…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Email me a reset link'
 
   return (
     <div className="flex min-h-full items-center justify-center px-5 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <img src="/favicon.svg" alt="" className="mx-auto mb-4 h-14 w-14 rounded-2xl shadow-card" />
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Dilla</h1>
-          <p className="mt-1.5 text-sm text-stone-500">Every recipe you love, in one place.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>
+          <p className="mt-1.5 text-sm text-stone-500">
+            {mode === 'forgot' ? 'We’ll email you a link to choose a new one.' : 'Every recipe you love, in one place.'}
+          </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-paper p-6 shadow-card">
           <div>
@@ -56,18 +75,20 @@ export default function Login() {
               placeholder="you@example.com"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-stone-500">Password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
-              placeholder="••••••••"
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-stone-500">Password</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           {notice && <p className="text-sm text-paprika-700">{notice}</p>}
           <button
@@ -75,14 +96,32 @@ export default function Login() {
             disabled={busy}
             className="w-full rounded-xl bg-paprika-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 disabled:opacity-60"
           >
-            {busy ? 'One moment…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+            {cta}
           </button>
         </form>
+        {mode === 'signin' && (
+          <p className="mt-3 text-center">
+            <button onClick={() => switchMode('forgot')} className="text-sm text-stone-400 hover:text-stone-600 hover:underline">
+              Forgot your password?
+            </button>
+          </p>
+        )}
         <p className="mt-4 text-center text-sm text-stone-500">
-          {mode === 'signin' ? 'No account yet?' : 'Already have an account?'}{' '}
-          <button onClick={toggleMode} className="font-medium text-paprika-700 hover:underline">
-            {mode === 'signin' ? 'Create one' : 'Sign in'}
-          </button>
+          {mode === 'signin' ? (
+            <>
+              No account yet?{' '}
+              <button onClick={() => switchMode('signup')} className="font-medium text-paprika-700 hover:underline">
+                Create one
+              </button>
+            </>
+          ) : (
+            <>
+              {mode === 'forgot' ? 'Remembered it?' : 'Already have an account?'}{' '}
+              <button onClick={() => switchMode('signin')} className="font-medium text-paprika-700 hover:underline">
+                Sign in
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>

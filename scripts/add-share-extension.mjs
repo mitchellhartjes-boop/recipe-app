@@ -382,6 +382,29 @@ proj.parseSync()
   }
 }
 
+// --- always-run: iPhone-only ------------------------------------------------
+// Dilla ships iPhone-only for v1: claiming iPad means Apple requires iPad
+// screenshots and reviews on iPad — extra rejection surface for a layout that
+// has never been tested there. `cap add ios` regenerates the project with
+// "1,2", so this is re-enforced on every run rather than set once.
+{
+  const configs = proj.pbxXCBuildConfigurationSection()
+  let changed = false
+  for (const key of Object.keys(configs)) {
+    const c = configs[key]
+    if (!c || typeof c !== 'object' || !c.buildSettings) continue
+    const fam = c.buildSettings.TARGETED_DEVICE_FAMILY
+    if (fam !== undefined && fam !== '"1"' && fam !== '1') {
+      c.buildSettings.TARGETED_DEVICE_FAMILY = '"1"'
+      changed = true
+    }
+  }
+  if (changed) {
+    writeFileSync(projPath, proj.writeSync())
+    console.log('Forced TARGETED_DEVICE_FAMILY to iPhone-only across all targets.')
+  }
+}
+
 // --- idempotency: bail if the target already exists ------------------------
 // The parser stores names QUOTED ("ShareExtension"), so a raw === comparison
 // silently misses and you get a duplicate target — which breaks the build.
@@ -455,7 +478,7 @@ for (const id of extConfigIds) {
   s.CODE_SIGN_ENTITLEMENTS = `"${GROUP_DIR}/ShareExtension.entitlements"`
   s.IPHONEOS_DEPLOYMENT_TARGET = '15.0'
   s.SWIFT_VERSION = '5.0'
-  s.TARGETED_DEVICE_FAMILY = '"1,2"'
+  s.TARGETED_DEVICE_FAMILY = '"1"' // iPhone-only, matching the app (see below)
   s.SKIP_INSTALL = 'YES' // extensions are embedded, never installed standalone
   s.CODE_SIGN_STYLE = 'Manual'
   s.MARKETING_VERSION = '1.0'

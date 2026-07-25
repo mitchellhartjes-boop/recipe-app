@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from './lib/auth'
 import { usePushRegistration } from './lib/usePushRegistration'
+import { supabase } from './lib/supabase'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Library from './pages/Library'
@@ -12,6 +14,7 @@ import AddRecipe from './pages/AddRecipe'
 import ReviewRecipe from './pages/ReviewRecipe'
 import RecipeDetail from './pages/RecipeDetail'
 import Settings from './pages/Settings'
+import ResetPassword from './pages/ResetPassword'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -22,6 +25,21 @@ function Protected({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// Routes password-reset email links to the reset screen. Supabase signs the
+// link's recovery token in wherever it lands (often the site root, since the
+// allow-list can fall back to the Site URL) and fires PASSWORD_RECOVERY — so
+// listen globally and steer to /reset rather than trusting the landing path.
+function RecoveryRedirect() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') navigate('/reset', { replace: true })
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [navigate])
+  return null
+}
+
 export default function App() {
   const { session } = useAuth()
   // Register for push once there's a signed-in user, and re-register if the
@@ -29,6 +47,7 @@ export default function App() {
   usePushRegistration(session?.user?.id)
   return (
     <BrowserRouter>
+      <RecoveryRedirect />
       <Routes>
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route element={<Protected><Layout /></Protected>}>
@@ -40,6 +59,7 @@ export default function App() {
           <Route path="/review" element={<ReviewRecipe />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/reset" element={<ResetPassword />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
