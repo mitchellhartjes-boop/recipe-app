@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { supabase } from './supabase'
 import { ensureShareKey } from './shareKey'
+import { configurePurchases } from './purchases'
 
 // Registers this device for push notifications and files the APNs token against
 // the signed-in user.
@@ -79,6 +80,13 @@ export function usePushRegistration(userId: string | undefined) {
         await ensureShareKey(userId)
       } catch (e) {
         console.warn('[shareKey] setup failed', e)
+      }
+      // Bind RevenueCat to this account so a Pro purchase follows the user, not
+      // the device. No-ops until the SDK key ships in a build.
+      try {
+        await configurePurchases(userId)
+      } catch (e) {
+        console.warn('[purchases] setup failed', e)
       }
       try {
         const token = await registerDevice(userId)

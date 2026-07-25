@@ -15,6 +15,7 @@ import ReviewRecipe from './pages/ReviewRecipe'
 import RecipeDetail from './pages/RecipeDetail'
 import Settings from './pages/Settings'
 import ResetPassword from './pages/ResetPassword'
+import Upgrade from './pages/Upgrade'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/recipe/:id" element={<RecipeDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/reset" element={<ResetPassword />} />
+          <Route path="/upgrade" element={<Upgrade />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -29,6 +29,12 @@ export default function AddRecipe() {
         return
       }
 
+      // Out of monthly imports -> the paywall IS the answer, not an error state.
+      if (result.reason === 'limit_reached') {
+        navigate('/upgrade')
+        return
+      }
+
       // link_in_bio (open the blog link & share it), inaccessible, or no recipe -> show the message
       // on the review screen so the user can act on it or enter the recipe manually.
       navigate('/review', { state: { draft: result.draft, banner: { kind: 'info', text: result.message } } })
@@ -43,9 +49,9 @@ export default function AddRecipe() {
     <div className="mx-auto max-w-xl">
       <h1 className="font-display text-3xl font-semibold tracking-tight">Add a recipe</h1>
       <p className="mt-2 text-sm text-stone-500">
-        Paste an Instagram reel, a recipe website, or a Pinterest link. Captions and websites come
-        back instantly; reels that link out or hide the recipe in the video get queued for the
-        background worker.
+        Paste an Instagram reel, a TikTok, a recipe website, or a Pinterest link. Captions and
+        websites come back instantly; posts that hide the recipe in the video get queued and appear
+        in your library a minute later.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 rounded-2xl bg-paper p-6 shadow-card">

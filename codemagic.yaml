@@ -30,6 +30,8 @@ workflows:
         - dilla
       vars:
         VITE_API_BASE: "https://recipe-vault-mh.netlify.app"
+        # VITE_REVENUECAT_APPLE_KEY comes from the dilla env group (a PUBLISHABLE
+        # RevenueCat SDK key — appl_…). Purchases no-op in builds without it.
         BUNDLE_ID: "com.mitchellhartjes.dilla"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"

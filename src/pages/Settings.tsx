@@ -121,6 +121,24 @@ export default function Settings() {
                 : `${usage.limit - usage.used} left until the 1st of next month.`}
             </p>
           </div>
+          {usage.plan === 'pro' ? (
+            <a
+              href="https://apps.apple.com/account/subscriptions"
+              target="_blank"
+              rel="noreferrer"
+              className="block border-t border-stone-100 px-4 py-3 text-sm font-medium text-stone-500 transition active:bg-stone-50"
+            >
+              Manage subscription
+            </a>
+          ) : (
+            <button
+              onClick={() => navigate('/upgrade')}
+              className="flex w-full items-center justify-between border-t border-stone-100 px-4 py-3 text-left transition active:bg-stone-50"
+            >
+              <span className="text-sm font-semibold text-paprika-700">Upgrade to Pro</span>
+              <span className="text-xs text-stone-400">200 recipes / month</span>
+            </button>
+          )}
         </Section>
       )}
 

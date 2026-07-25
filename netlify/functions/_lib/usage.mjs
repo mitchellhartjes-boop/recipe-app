@@ -60,6 +60,32 @@ export async function planFor(admin, userId) {
   }
 }
 
+// Deny-path double-check against RevenueCat. Two jobs: close the race where a
+// user subscribes and immediately imports before the webhook lands, and heal a
+// missed webhook entirely. Only runs when a FREE user is about to be refused —
+// i.e. almost never — so the extra REST call costs nothing in the common case.
+// Any failure returns null and the original denial stands.
+async function proFromRevenueCat(userId) {
+  const secret = process.env.REVENUECAT_SECRET_KEY
+  if (!secret) return null
+  try {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), 6000)
+    const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${secret}`, Accept: 'application/json' },
+      signal: ctl.signal,
+    }).finally(() => clearTimeout(timer))
+    if (!res.ok) return null
+    const body = await res.json()
+    const ent = body?.subscriber?.entitlements?.pro
+    if (!ent?.expires_date) return null
+    const expires = new Date(ent.expires_date).getTime()
+    return expires > Date.now() ? { expiresIso: new Date(expires).toISOString() } : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Claim one import slot. Returns { allowed, used, limit, plan, reason }.
  * Fails OPEN when metering is unavailable (no service key, RPC error): a
@@ -67,9 +93,9 @@ export async function planFor(admin, userId) {
  */
 export async function reserveImport(admin, userId, kind) {
   if (!admin || !userId) return { allowed: true, metered: false }
-  const plan = await planFor(admin, userId)
-  const limits = limitsFor(plan)
-  try {
+  let plan = await planFor(admin, userId)
+  let limits = limitsFor(plan)
+  const attempt = async () => {
     const { data, error } = await admin.rpc('reserve_import', {
       p_user_id: userId,
       p_kind: kind,
@@ -78,6 +104,25 @@ export async function reserveImport(admin, userId, kind) {
     })
     if (error) return { allowed: true, metered: false }
     return { ...data, plan, metered: true }
+  }
+  try {
+    let result = await attempt()
+    // About to refuse a free user — make sure they aren't a Pro subscriber the
+    // webhook hasn't reached yet (or was missed for). If they are, record it
+    // and re-try once under the Pro limits.
+    if (result.metered && !result.allowed && plan === 'free') {
+      const pro = await proFromRevenueCat(userId)
+      if (pro) {
+        await admin.from('recipe_profiles').upsert(
+          { user_id: userId, plan: 'pro', plan_renews_at: pro.expiresIso, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' },
+        )
+        plan = 'pro'
+        limits = limitsFor(plan)
+        result = await attempt()
+      }
+    }
+    return result
   } catch {
     return { allowed: true, metered: false }
   }
