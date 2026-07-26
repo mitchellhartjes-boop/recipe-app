@@ -8,7 +8,6 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Library from './pages/Library'
 import Category from './pages/Category'
-import Search from './pages/Search'
 import Grocery from './pages/Grocery'
 import AddRecipe from './pages/AddRecipe'
 import ReviewRecipe from './pages/ReviewRecipe'
@@ -55,7 +54,6 @@ export default function App() {
         <Route element={<Protected><Layout /></Protected>}>
           <Route path="/" element={<Library />} />
           <Route path="/c/:slug" element={<Category />} />
-          <Route path="/search" element={<Search />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/grocery" element={<Grocery />} />
           <Route path="/add" element={<AddRecipe />} />
