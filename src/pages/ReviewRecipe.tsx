@@ -87,12 +87,23 @@ export default function ReviewRecipe() {
         .single()
       if (dbError) throw dbError
 
-      // Instagram's caption embed doesn't expose a usable cover image, so a
-      // reel saved through this screen has no photo. Queue the same background
-      // 'cover' job the iOS Shortcut path uses: the worker pulls the reel's
-      // clean cover via Apify and fills it in within a minute or two.
-      // Best-effort — a missing photo must never block the save.
-      if (!initial!.image_url && initial!.source_url && /instagram\.com/i.test(initial!.source_url)) {
+      const fromVideoPlatform =
+        initial!.source_url && /instagram\.com|tiktok\.com/i.test(initial!.source_url)
+
+      // Saved with ingredients but no steps (an ingredients-only caption) from a
+      // video platform: queue a steps backfill — the worker watches the video
+      // and completes the recipe in place. Unmetered (it finishes an import the
+      // user already spent a slot on); the worker validates eligibility.
+      // Best-effort, like the cover job below — never blocks the save.
+      if (cleanSteps.length === 0 && fromVideoPlatform) {
+        void supabase
+          .from('recipe_jobs')
+          .insert({ url: initial!.source_url, kind: 'video', meta: { recipe_id: data.id, backfill: 'steps' } })
+      } else if (!initial!.image_url && initial!.source_url && /instagram\.com/i.test(initial!.source_url)) {
+        // Instagram's caption embed doesn't expose a usable cover image, so a
+        // reel saved through this screen has no photo. The worker pulls the
+        // reel's clean cover via Apify and fills it in within a minute or two.
+        // (The backfill branch above also fills the cover, hence the else.)
         void supabase
           .from('recipe_jobs')
           .insert({ url: initial!.source_url, kind: 'cover', meta: { recipe_id: data.id } })

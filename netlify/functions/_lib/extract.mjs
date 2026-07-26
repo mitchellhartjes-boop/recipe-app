@@ -419,3 +419,41 @@ export async function recoverFromWeb({ title, author, sourceUrl, externalUrl, ap
   }
   return { recipe, model: RECOVERY_MODEL, usage: resp.usage, stop_reason: resp.stop_reason }
 }
+
+// Repair a URL the caption extractor handed back before anything tries to fetch
+// it. Haiku is inconsistent about schemes — it returns "www.site.com/recipe" as
+// readily as a full URL, and fetch() throws a raw TypeError on the bare form.
+// Also unwraps Instagram's l.instagram.com redirector and strips tracking params.
+// Returns null when the string isn't host-shaped at all.
+export function normalizeUrl(raw) {
+  if (typeof raw !== 'string') return null
+  let s = raw.trim().replace(/[.,)\]}'"]+$/, '')
+  if (!s) return null
+
+  if (/^(https?:\/\/)?l\.instagram\.com/i.test(s)) {
+    try {
+      const wrapped = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`)
+      const target = wrapped.searchParams.get('u')
+      if (target) s = decodeURIComponent(target)
+    } catch {
+      /* not parseable as a wrapper — fall through and treat it as a plain url */
+    }
+  }
+
+  if (!/^https?:\/\//i.test(s)) {
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(s)) return null // not host-shaped
+    s = `https://${s}`
+  }
+
+  try {
+    const u = new URL(s)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(fbclid|gclid|igshid|si|ref)$/i.test(key)) u.searchParams.delete(key)
+    }
+    return u.toString()
+  } catch {
+    return null
+  }
+}
+

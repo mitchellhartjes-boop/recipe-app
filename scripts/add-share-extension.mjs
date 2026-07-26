@@ -94,13 +94,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
     // in that state; asking for provisional unconditionally would record a
     // provisional grant and permanently lock the app out of loud notifications.
     private func requestNotificationAuthorization(canPrompt: Bool) {
+        guard !canPrompt else { return } // foreground: onboarding owns the ask
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in
             guard settings.authorizationStatus == .notDetermined else { return }
-            let options: UNAuthorizationOptions = canPrompt
-                ? [.alert, .sound]
-                : [.alert, .sound, .provisional]
-            center.requestAuthorization(options: options) { _, _ in }
+            center.requestAuthorization(options: [.alert, .sound, .provisional]) { _, _ in }
         }
     }
 
@@ -205,12 +203,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
     func applicationWillEnterForeground(_ application: UIApplication) {}
     func applicationWillTerminate(_ application: UIApplication) {}
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Now we can definitely present a prompt. Covers a first launch that
-        // began in the background (where only provisional was possible) and any
-        // launch where permission was never determined.
-        requestNotificationAuthorization(canPrompt: true)
-    }
+    func applicationDidBecomeActive(_ application: UIApplication) {}
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,

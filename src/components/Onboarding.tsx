@@ -1,9 +1,78 @@
 import { useState } from 'react'
 import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon } from './icons'
 import { markOnboarded } from '../lib/onboarding'
+import { useAuth } from '../lib/auth'
+import { promptForNotifications, registerPushNow } from '../lib/usePushRegistration'
+
+// ---- illustrations ---------------------------------------------------------
+// Drawn with the app's own tokens (paper cards, stone shapes, paprika accents)
+// so they read as Dilla, hold up in dark mode for free, and never look like a
+// pasted screenshot that ages out of date.
+
+/** A post card → share → Dilla, with the notification that closes the loop. */
+function ShareFlowArt() {
+  return (
+    <div className="mb-6 select-none" aria-hidden="true">
+      <div className="flex items-center justify-center gap-3">
+        {/* the post being shared */}
+        <div className="w-24 shrink-0 rounded-2xl bg-paper p-2 shadow-card">
+          <div className="flex h-20 items-center justify-center rounded-xl bg-paprika-50 text-3xl">🍝</div>
+          <div className="mt-2 h-1.5 w-3/4 rounded-full bg-stone-200" />
+          <div className="mt-1 h-1.5 w-1/2 rounded-full bg-stone-200" />
+        </div>
+        {/* share arrow */}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 shrink-0 text-paprika-600">
+          <path d="M4 12h14M13 6l6 6-6 6" />
+        </svg>
+        {/* Dilla */}
+        <img src="/favicon.svg" alt="" className="h-14 w-14 shrink-0 rounded-2xl shadow-card" />
+      </div>
+      {/* the notification that closes the loop */}
+      <div className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full bg-paper py-1.5 pl-2 pr-3.5 shadow-card">
+        <img src="/favicon.svg" alt="" className="h-5 w-5 rounded-md" />
+        <span className="text-[11px] font-medium text-ink">Saved to Dilla</span>
+        <CheckIcon className="h-3.5 w-3.5 text-paprika-700" />
+      </div>
+    </div>
+  )
+}
+
+/** A mock share sheet: the app row, Dilla highlighted, More at the end. */
+function ShareSheetArt() {
+  return (
+    <div className="mb-6 flex justify-center select-none" aria-hidden="true">
+      <div className="w-full max-w-[270px] rounded-2xl bg-paper px-3 pb-3 pt-2 shadow-card">
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-stone-200" />
+        <div className="flex items-start justify-between">
+          {['a', 'b', 'c'].map((k) => (
+            <div key={k} className="flex w-11 flex-col items-center gap-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100">
+                <div className="h-4 w-4 rounded-md bg-stone-200" />
+              </div>
+              <span className="text-[9px] text-stone-400">App</span>
+            </div>
+          ))}
+          <div className="flex w-11 flex-col items-center gap-1">
+            <img src="/favicon.svg" alt="" className="h-10 w-10 rounded-xl shadow-sm ring-2 ring-paprika-600" />
+            <span className="text-[9px] font-semibold text-paprika-700">Dilla</span>
+          </div>
+          <div className="flex w-11 flex-col items-center gap-1">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-400">
+              <span className="mb-1 tracking-widest">…</span>
+            </div>
+            <span className="text-[9px] text-stone-400">More</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- slides ----------------------------------------------------------------
 
 type Slide = {
   icon: React.ReactNode
+  art?: React.ReactNode
   title: string
   body: React.ReactNode
 }
@@ -21,6 +90,7 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <PlusIcon className="h-8 w-8" />,
+    art: <ShareFlowArt />,
     title: 'Send a recipe from anywhere',
     body: (
       <>
@@ -36,6 +106,7 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <CheckIcon className="h-8 w-8" />,
+    art: <ShareSheetArt />,
     title: 'Can’t find Dilla when you share?',
     body: (
       <>
@@ -86,14 +157,32 @@ const SLIDES: Slide[] = [
   },
 ]
 
+// The slide whose body promises a notification — the one honest moment to put
+// the system permission dialog up.
+const NOTIFY_SLIDE = 1
+
 export default function Onboarding({ onDone }: { onDone: () => void }) {
+  const { session } = useAuth()
   const [i, setI] = useState(0)
   const last = i === SLIDES.length - 1
   const slide = SLIDES[i]
 
   function finish() {
     markOnboarded()
+    // File this device's push token now that the tour is over (prompting here
+    // if the user skipped past the notification slide). Fire-and-forget: the
+    // app must never wait on it.
+    void registerPushNow(session?.user?.id)
     onDone()
+  }
+
+  function next() {
+    if (i === NOTIFY_SLIDE) {
+      // They just read WHY Dilla notifies — ask while it makes sense.
+      void promptForNotifications()
+    }
+    if (last) finish()
+    else setI(i + 1)
   }
 
   return (
@@ -107,9 +196,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-paprika-50 text-paprika-700">
-          {slide.icon}
-        </div>
+        {slide.art ?? (
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-paprika-50 text-paprika-700">
+            {slide.icon}
+          </div>
+        )}
         <h2 className="font-display text-2xl font-semibold leading-tight">{slide.title}</h2>
         <p className="mt-3 max-w-sm text-[15px] leading-relaxed text-stone-600">{slide.body}</p>
       </div>
@@ -124,7 +215,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           ))}
         </div>
         <button
-          onClick={() => (last ? finish() : setI(i + 1))}
+          onClick={next}
           className="w-full rounded-2xl bg-paprika-700 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 active:scale-[0.98]"
         >
           {last ? 'Start cooking' : 'Next'}

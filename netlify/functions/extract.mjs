@@ -2,7 +2,8 @@
 // POST { url } -> { ok: true, source_kind, recipe } | { ok: false, reason, message, draft }
 // Slow paths (link-in-bio web_search, video) are handled async elsewhere — this returns a
 // reason so the client can route them.
-import { extractReel, extractWebPage, extractRecipeFromText } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromText, normalizeUrl } from './_lib/extract.mjs'
+import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { rehostImage, appClient } from './_lib/images.mjs'
 import { adminClient as usageAdmin, userFromJwt, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
@@ -131,26 +132,55 @@ export default async (req) => {
           draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
         })
       }
-      // Recipe is on the creator's blog. If the link is in the caption, extract it now (cheap);
-      // otherwise tell the user to open it and share the page (no slow web_search recovery).
+      // Recipe is on the creator's blog. Same ladder as the share path: a link
+      // in the caption -> fetch it; no link -> find the post on the creator's
+      // own site; still nothing -> the video usually demonstrates it anyway, so
+      // report video_only and the client queues the video job.
       if (r.where_is_recipe === 'external_link' || r.external_url) {
-        if (r.external_url) {
-          const web = await extractWebPage({ url: r.external_url, apiKey })
-          if (web.recipe.found) {
-            const cover = await rehostImage(await appClient(), web.imageUrl, web.recipe.title || r.title || 'recipe')
-            keepCharge = true
-            return json({
-              ok: true,
-              source_kind: 'web',
-              recipe: toDraft({ recipe: web.recipe, sourceUrl: r.external_url, sourcePlatform: 'web', sourceKind: 'web', model: web.model, imageUrl: cover || web.imageUrl }),
-            })
+        const target = normalizeUrl(r.external_url)
+        if (target) {
+          try {
+            const web = await extractWebPage({ url: target, apiKey })
+            if (web.recipe.found) {
+              const cover = await rehostImage(await appClient(), web.imageUrl, web.recipe.title || r.title || 'recipe')
+              keepCharge = true
+              return json({
+                ok: true,
+                source_kind: 'web',
+                recipe: toDraft({ recipe: web.recipe, sourceUrl: target, sourcePlatform: 'web', sourceKind: 'web', model: web.model, imageUrl: cover || web.imageUrl }),
+              })
+            }
+          } catch {
+            /* unreadable linked page — recovery below gets a turn */
           }
         }
-        const who = r.source_author ? `@${r.source_author}'s` : "the creator's"
+        const recovered = await recoverFromCreatorSite({
+          supabase: await appClient(),
+          handle: res.handle,
+          dish: r.title,
+          captionUrl: target,
+          captionDomain: r.creator_domain,
+        })
+        if (recovered.ok) {
+          const cover = await rehostImage(await appClient(), recovered.recipe.image_url, recovered.recipe.title || r.title || 'recipe')
+          keepCharge = true
+          return json({
+            ok: true,
+            source_kind: 'web',
+            recipe: toDraft({
+              recipe: { ...recovered.recipe, source_author: r.source_author ?? res.handle ?? null },
+              sourceUrl: recovered.url,
+              sourcePlatform: 'web',
+              sourceKind: 'link_in_bio',
+              model: 'json-ld',
+              imageUrl: cover || recovered.recipe.image_url,
+            }),
+          })
+        }
         return json({
           ok: false,
-          reason: 'link_in_bio',
-          message: `This recipe is on ${who} blog, not in the caption. Open the link in the reel and share that web page to the app.`,
+          reason: 'video_only',
+          message: 'The written recipe is on their blog and couldn’t be confirmed — reading it from the video instead.',
           draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
         })
       }

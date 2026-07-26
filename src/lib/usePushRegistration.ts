@@ -18,7 +18,7 @@ import { configurePurchases } from './purchases'
 // is why every call is behind an isNativePlatform check.
 
 /** Ask, register, and store — returns the token so callers can log/debug. */
-async function registerDevice(userId: string) {
+async function registerDevice(userId: string, allowPrompt: boolean) {
   // Gate on checkPermissions, NOT requestPermissions. The AppDelegate can grant
   // PROVISIONAL authorization (quiet notifications, no prompt) — and while
   // checkPermissions maps provisional to 'granted', requestPermissions re-asks
@@ -27,6 +27,10 @@ async function registerDevice(userId: string) {
   // token was never produced and the push had nothing to deliver to.
   let perm = await PushNotifications.checkPermissions()
   if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
+    // Undecided. Only the onboarding flow may put the system dialog up (it asks
+    // on the slide that explains WHY); the automatic sign-in path stays silent
+    // so the first thing a new user sees is never a cold permission prompt.
+    if (!allowPrompt) return null
     perm = await PushNotifications.requestPermissions()
   }
   // Register unless the user has explicitly said no. A provisional or full grant
@@ -89,7 +93,7 @@ export function usePushRegistration(userId: string | undefined) {
         console.warn('[purchases] setup failed', e)
       }
       try {
-        const token = await registerDevice(userId)
+        const token = await registerDevice(userId, false)
         if (!cancelled && token) console.info('[push] registered')
       } catch (e) {
         // Never let a push failure break the app — it is an enhancement, and
@@ -105,6 +109,41 @@ export function usePushRegistration(userId: string | undefined) {
       void PushNotifications.removeAllListeners()
     }
   }, [userId])
+}
+
+/**
+ * Put the system permission dialog up, in context. Called from the onboarding
+ * slide that explains notifications — the one moment the ask makes sense.
+ */
+export async function promptForNotifications() {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    const perm = await PushNotifications.checkPermissions()
+    if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
+      await PushNotifications.requestPermissions()
+    }
+  } catch {
+    /* the finish-time registration below retries anyway */
+  }
+}
+
+/**
+ * Register after onboarding completes (prompting if the user skipped past the
+ * notification slide). The sign-in hook deliberately never prompts, so this is
+ * where a brand-new user's token actually gets filed.
+ */
+export async function registerPushNow(userId: string | undefined) {
+  if (!Capacitor.isNativePlatform() || !userId) return
+  try {
+    const token = await registerDevice(userId, true)
+    if (token) console.info('[push] registered (onboarding)')
+  } catch (e) {
+    console.warn('[push] onboarding registration failed', e)
+  } finally {
+    // These listeners are one-shot and settled; clearing keeps a later hook
+    // re-run from stacking against stale ones.
+    void PushNotifications.removeAllListeners()
+  }
 }
 
 /**

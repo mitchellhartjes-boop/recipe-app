@@ -67,7 +67,10 @@ function toRecord(r, { url, sourcePlatform, sourceKind }) {
 // and a local notification can't fire. Cover jobs are silent — they just backfill
 // an image on a recipe the user was already notified about.
 async function notifyJob(supabase, job, outcome) {
-  if (job.kind === 'cover' || !job.user_id || !apnsConfigured()) return
+  // Cover and steps-backfill jobs are silent: they complete a recipe the user
+  // was already notified about, and a second ping (or a scary failure for a
+  // recipe that exists and works) would only confuse.
+  if (job.kind === 'cover' || job.meta?.backfill || !job.user_id || !apnsConfigured()) return
   const { data: tokens } = await supabase.from('device_tokens').select('token').eq('user_id', job.user_id)
   if (!tokens?.length) return
 
@@ -117,6 +120,57 @@ async function processJob(supabase, job) {
     }
     await supabase.from('recipe_jobs').update({ status: 'done', recipe_id: recipeId ?? null, error: null }).eq('id', job.id)
     console.log(`[job ${job.id}] cover ${stored ? 'attached' : 'skipped'} -> recipe ${recipeId}`)
+    return
+  }
+
+  // Steps backfill: a caption import saved with ingredients but no method (the
+  // caption was just a shopping list). Watch the video and complete the EXISTING
+  // recipe rather than creating a new one. Unmetered at insert, so validate
+  // hard before doing any paid work: the recipe must belong to the job's user
+  // and genuinely have no steps — otherwise a crafted client insert could buy
+  // free video runs.
+  if (job.kind === 'video' && job.meta?.backfill === 'steps' && job.meta?.recipe_id) {
+    const { data: target } = await supabase
+      .from('recipe_recipes')
+      .select('id, user_id, steps, image_url, servings, prep_minutes, cook_minutes, total_minutes')
+      .eq('id', job.meta.recipe_id)
+      .maybeSingle()
+    const valid = target && target.user_id === job.user_id && (!Array.isArray(target.steps) || target.steps.length === 0)
+    if (!valid) {
+      await supabase.from('recipe_jobs').update({ status: 'done', error: 'backfill skipped: not eligible' }).eq('id', job.id)
+      console.log(`[job ${job.id}] backfill skipped (recipe missing, not owned, or already has steps)`)
+      return
+    }
+    if (!APIFY) throw new Error('APIFY_TOKEN is not set — needed to fetch the video')
+    const { recipe: r, imageUrl } = await extractVideoViaApify({
+      url: job.url,
+      apifyToken: APIFY,
+      apiKey: ANTHROPIC,
+      groqKey: GROQ,
+      ffmpeg: FFMPEG,
+      workdir: path.join(TOOLS, 'work', job.id),
+    })
+    const patch = {}
+    if (r.found && Array.isArray(r.steps) && r.steps.length) patch.steps = r.steps
+    // The video often states what the caption omitted — fill blanks, never overwrite.
+    if (target.servings == null && r.servings != null) patch.servings = r.servings
+    if (target.prep_minutes == null && r.prep_minutes != null) patch.prep_minutes = r.prep_minutes
+    if (target.cook_minutes == null && r.cook_minutes != null) patch.cook_minutes = r.cook_minutes
+    if (target.total_minutes == null && r.total_minutes != null) patch.total_minutes = r.total_minutes
+    if (!target.image_url && imageUrl) {
+      try {
+        const stored = await rehostImage(supabase, imageUrl, 'reel')
+        if (stored) patch.image_url = stored
+      } catch {
+        /* cover is a bonus here; the steps are the job */
+      }
+    }
+    if (Object.keys(patch).length) {
+      const { error } = await supabase.from('recipe_recipes').update(patch).eq('id', target.id)
+      if (error) throw error
+    }
+    await supabase.from('recipe_jobs').update({ status: 'done', recipe_id: target.id, error: null }).eq('id', job.id)
+    console.log(`[job ${job.id}] backfill -> recipe ${target.id} (${patch.steps ? patch.steps.length + ' steps' : 'no steps found in video'})`)
     return
   }
 

@@ -20,7 +20,7 @@
 // the owner's account, so older installs and the original Shortcut keep working.
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { extractReel, extractWebPage, extractRecipeFromImage, extractRecipeFromText, resolvePinterestLink } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromImage, extractRecipeFromText, resolvePinterestLink, normalizeUrl } from './_lib/extract.mjs'
 import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { coverImage } from './_lib/images.mjs'
@@ -61,43 +61,6 @@ function firstUrl(input) {
   const m = input.match(/https?:\/\/[^\s"'<>]+/i)
   if (!m) return null
   return m[0].replace(/[.,)\]}'"]+$/, '')
-}
-
-// Repair a URL the caption extractor handed back before anything tries to fetch
-// it. Haiku is inconsistent about schemes — it returns "www.site.com/recipe" as
-// readily as a full URL, and fetch() throws a raw TypeError on the bare form.
-// Also unwraps Instagram's l.instagram.com redirector and strips tracking params.
-// Returns null when the string isn't host-shaped at all.
-function normalizeUrl(raw) {
-  if (typeof raw !== 'string') return null
-  let s = raw.trim().replace(/[.,)\]}'"]+$/, '')
-  if (!s) return null
-
-  if (/^(https?:\/\/)?l\.instagram\.com/i.test(s)) {
-    try {
-      const wrapped = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`)
-      const target = wrapped.searchParams.get('u')
-      if (target) s = decodeURIComponent(target)
-    } catch {
-      /* not parseable as a wrapper — fall through and treat it as a plain url */
-    }
-  }
-
-  if (!/^https?:\/\//i.test(s)) {
-    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(s)) return null // not host-shaped
-    s = `https://${s}`
-  }
-
-  try {
-    const u = new URL(s)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
-    for (const key of [...u.searchParams.keys()]) {
-      if (/^utm_/i.test(key) || /^(fbclid|gclid|igshid|si|ref)$/i.test(key)) u.searchParams.delete(key)
-    }
-    return u.toString()
-  } catch {
-    return null
-  }
 }
 
 // Constant-time token compare (hash first so lengths never differ / leak).
@@ -369,6 +332,11 @@ export default async (req) => {
         )
         const { data, error } = await insertRecipe(supabase, userId, record)
         if (error) throw error
+        if (!record.steps.length) {
+          // Ingredients-only caption — the worker watches the video and fills
+          // in the steps. (The cover already exists from the oEmbed thumbnail.)
+          await insertJob(supabase, userId, { url: post.canonicalUrl, kind: 'video', meta: { recipe_id: data.id, backfill: 'steps' } })
+        }
         keepCharge = true
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: record.image_url, message: `Saved “${record.title}” to your library.` })
       }
@@ -417,7 +385,15 @@ export default async (req) => {
         const record = toRecord(r, { url: link, sourcePlatform: 'instagram', sourceKind: 'caption', imageUrl: null, model: res.model })
         const { data, error } = await insertRecipe(supabase, userId, record)
         if (error) throw error
-        await insertJob(supabase, userId, { url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        if (!record.steps.length) {
+          // Caption carried the ingredients but not the method ("here's your
+          // shopping list…") — a half recipe on the headline path. Queue a
+          // steps backfill: the worker watches the video and fills in the
+          // steps (and the cover, so no separate cover job is needed).
+          await insertJob(supabase, userId, { url: link, kind: 'video', meta: { recipe_id: data.id, backfill: 'steps' } })
+        } else {
+          await insertJob(supabase, userId, { url: link, kind: 'cover', meta: { recipe_id: data.id } })
+        }
         keepCharge = true
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: null, message: `Saved “${record.title}” to your library.` })
       }
@@ -495,15 +471,29 @@ export default async (req) => {
           })
         }
 
-        // Abstained on purpose. Saying WHY beats a generic failure, and saving a
-        // near-miss from the right creator would quietly corrupt the library.
-        const who = res.handle ? `@${res.handle}'s` : "the creator's"
-        return json({
-          ok: false,
-          status: 'link_in_bio',
-          kind: 'instagram',
-          message: `This recipe lives on ${who} blog and I couldn’t confirm which post it is (${recovered.reason}). Open the link in the reel and share that page instead.`,
-        })
+        // Couldn't confirm the blog post — but "link in bio" reels very often
+        // demonstrate the whole recipe on camera anyway, so before giving up,
+        // hand the reel to the video pipeline. Only if the video allowance is
+        // gone do we fall back to the honest tell-the-user message.
+        if (reservation.metered) {
+          await refundImport(meterAdmin, userId, chargedKind)
+          const videoRes = await reserveImport(meterAdmin, userId, 'video')
+          if (!videoRes.allowed) {
+            keepCharge = true // nothing left reserved to release
+            const who = res.handle ? `@${res.handle}'s` : "the creator's"
+            return json({
+              ok: false,
+              status: 'link_in_bio',
+              kind: 'instagram',
+              message: `This recipe lives on ${who} blog and I couldn’t confirm which post it is. Open the link in the reel and share that page instead.`,
+            })
+          }
+          chargedKind = 'video'
+        }
+        const { data: vjob, error: vErr } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: {} })
+        if (vErr) throw vErr
+        keepCharge = true
+        return json({ ok: true, status: 'queued', kind: 'video', job_id: vjob.id, message: 'Queued — reading the recipe from the video. It’ll appear in a minute or two.' })
       }
       // Otherwise the recipe is in the video itself -> queue the video (Apify) path.
       //

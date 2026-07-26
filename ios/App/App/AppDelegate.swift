@@ -53,24 +53,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
         return true
     }
 
-    // Ask for notification permission in the strongest form the current launch
-    // allows. Foreground: request the real thing, so the user gets a prompt and
-    // proper banners + sound. Background relaunch — which is exactly how the
-    // FIRST share arrives if Dilla has never been opened — cannot present a
-    // prompt, so fall back to provisional: quiet delivery beats none, and iOS
-    // offers to promote it to prominent from the notification itself.
+    // Foreground launches no longer prompt from here: a cold-start system
+    // dialog was the very first thing a new user saw, before anything had
+    // explained why Dilla wants notifications. Onboarding now asks in context
+    // (through the push plugin) on the slide that explains them. This path only
+    // handles the BACKGROUND relaunch — the first share arriving before the app
+    // was ever opened — where no prompt can show; provisional grants quietly so
+    // that notification still lands.
     //
     // Guarded on .notDetermined because requestAuthorization only ever prompts
     // in that state; asking for provisional unconditionally would record a
     // provisional grant and permanently lock the app out of loud notifications.
     private func requestNotificationAuthorization(canPrompt: Bool) {
+        guard !canPrompt else { return } // foreground: onboarding owns the ask
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in
             guard settings.authorizationStatus == .notDetermined else { return }
-            let options: UNAuthorizationOptions = canPrompt
-                ? [.alert, .sound]
-                : [.alert, .sound, .provisional]
-            center.requestAuthorization(options: options) { _, _ in }
+            center.requestAuthorization(options: [.alert, .sound, .provisional]) { _, _ in }
         }
     }
 
@@ -178,13 +177,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
     func applicationDidEnterBackground(_ application: UIApplication) {}
     func applicationWillEnterForeground(_ application: UIApplication) {}
     func applicationWillTerminate(_ application: UIApplication) {}
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Now we can definitely present a prompt. Covers a first launch that
-        // began in the background (where only provisional was possible) and any
-        // launch where permission was never determined.
-        requestNotificationAuthorization(canPrompt: true)
-    }
+    func applicationDidBecomeActive(_ application: UIApplication) {}
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,
