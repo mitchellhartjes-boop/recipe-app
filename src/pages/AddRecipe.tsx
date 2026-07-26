@@ -1,18 +1,24 @@
-import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { extractRecipe, createJob } from '../lib/api'
 
 export default function AddRecipe() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const autoRan = useRef(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    await run(url.trim())
+  }
+
+  async function run(link: string) {
+    if (!link) return
     setBusy(true)
     setError(null)
-    const link = url.trim()
     try {
       const result = await extractRecipe(link)
 
@@ -44,6 +50,18 @@ export default function AddRecipe() {
       setBusy(false)
     }
   }
+
+  // The Discover browser's "Save this recipe" lands here with the page URL and
+  // runs the import immediately — same flow as pasting the link, zero retyping.
+  // (Placed after run() so lint sees the declaration first.)
+  useEffect(() => {
+    const state = location.state as { url?: string; auto?: boolean } | null
+    if (!state?.url || autoRan.current) return
+    autoRan.current = true
+    setUrl(state.url)
+    if (state.auto) void run(state.url)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="mx-auto max-w-xl">

@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { BookIcon, SearchIcon, CartIcon, PlusIcon } from './icons'
+import { BookIcon, SearchIcon, CompassIcon, CartIcon, PlusIcon } from './icons'
 
 export default function BottomNav() {
   const { pathname } = useLocation()
@@ -9,13 +9,14 @@ export default function BottomNav() {
   const tabs: { to: string; label: string; active: boolean; render: (on: boolean) => React.ReactNode; accent?: boolean }[] = [
     { to: '/', label: 'Recipes', active: recipesActive, render: () => <BookIcon className="h-6 w-6" /> },
     { to: '/search', label: 'Search', active: pathname.startsWith('/search'), render: () => <SearchIcon className="h-6 w-6" /> },
+    { to: '/discover', label: 'Discover', active: pathname.startsWith('/discover'), render: () => <CompassIcon className="h-6 w-6" /> },
     { to: '/grocery', label: 'Grocery', active: pathname.startsWith('/grocery'), render: () => <CartIcon className="h-6 w-6" /> },
     { to: '/add', label: 'Add', active: pathname.startsWith('/add'), render: () => <PlusIcon className="h-6 w-6" />, accent: true },
   ]
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 w-full max-w-full border-t border-stone-200/70 bg-cream/90 pb-safe-b backdrop-blur-lg sm:hidden">
-      <div className="mx-auto grid w-full max-w-md grid-cols-4 px-1 pt-1.5">
+      <div className="mx-auto grid w-full max-w-md grid-cols-5 px-1 pt-1.5">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} className="flex flex-col items-center gap-1 py-2 transition active:opacity-60">
             <span

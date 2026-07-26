@@ -19,6 +19,7 @@
 		DA66E9D2BE9043F0AAE9D6D9 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7BFA00B1DE4E4D832541CB /* ShareViewController.swift */; };
 		452C8A71C3CA4721AB4D3B3F /* ShareExtension.entitlements in Resources */ = {isa = PBXBuildFile; fileRef = FFBE315B037349D097ED841A /* ShareExtension.entitlements */; };
 		EFF4D3720BD042749A6F7A29 /* SharedStorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF625B45E5BB4570A07BE49B /* SharedStorePlugin.swift */; };
+		2BAED13841544347981D2B2C /* DillaBrowserPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB220EFE824798BBAAAB4B /* DillaBrowserPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		FE7BFA00B1DE4E4D832541CB /* ShareViewController.swift */ = {isa = PBXFileReference; name = "ShareViewController.swift"; path = "ShareViewController.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		FFBE315B037349D097ED841A /* ShareExtension.entitlements */ = {isa = PBXFileReference; name = "ShareExtension.entitlements"; path = "ShareExtension.entitlements"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
 		DF625B45E5BB4570A07BE49B /* SharedStorePlugin.swift */ = {isa = PBXFileReference; name = "SharedStorePlugin.swift"; path = "SharedStorePlugin.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		B4BB220EFE824798BBAAAB4B /* DillaBrowserPlugin.swift */ = {isa = PBXFileReference; name = "DillaBrowserPlugin.swift"; path = "DillaBrowserPlugin.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +90,7 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				B4BB220EFE824798BBAAAB4B /* DillaBrowserPlugin.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -212,6 +215,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				EFF4D3720BD042749A6F7A29 /* SharedStorePlugin.swift in Sources */,
+				2BAED13841544347981D2B2C /* DillaBrowserPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

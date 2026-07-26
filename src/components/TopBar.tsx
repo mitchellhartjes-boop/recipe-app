@@ -6,6 +6,7 @@ function titleFor(path: string): string {
   if (path.startsWith('/add')) return 'Add recipe'
   if (path.startsWith('/review')) return 'Review & save'
   if (path.startsWith('/search')) return 'Search'
+  if (path.startsWith('/discover')) return 'Discover'
   if (path.startsWith('/grocery')) return 'Grocery list'
   if (path.startsWith('/settings')) return 'Settings'
   if (path.startsWith('/c/')) {
@@ -56,7 +57,7 @@ export default function TopBar() {
 
   const isHome = pathname === '/'
   // Home + the other bottom-nav tabs are top-level (title + settings, no back button).
-  const isPrimary = isHome || pathname.startsWith('/search') || pathname.startsWith('/grocery')
+  const isPrimary = isHome || pathname.startsWith('/search') || pathname.startsWith('/discover') || pathname.startsWith('/grocery')
 
   return (
     <header className="sticky top-0 z-20 w-full max-w-full border-b border-stone-200/70 bg-cream/80 pt-safe-t backdrop-blur">
@@ -100,6 +101,7 @@ export default function TopBar() {
             Recipes
           </DesktopLink>
           <DesktopLink to="/search">Search</DesktopLink>
+          <DesktopLink to="/discover">Discover</DesktopLink>
           <DesktopLink to="/grocery">Grocery</DesktopLink>
           <Link
             to="/add"

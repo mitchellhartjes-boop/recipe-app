@@ -16,6 +16,7 @@ import RecipeDetail from './pages/RecipeDetail'
 import Settings from './pages/Settings'
 import ResetPassword from './pages/ResetPassword'
 import Upgrade from './pages/Upgrade'
+import Discover from './pages/Discover'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/" element={<Library />} />
           <Route path="/c/:slug" element={<Category />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/discover" element={<Discover />} />
           <Route path="/grocery" element={<Grocery />} />
           <Route path="/add" element={<AddRecipe />} />
           <Route path="/review" element={<ReviewRecipe />} />

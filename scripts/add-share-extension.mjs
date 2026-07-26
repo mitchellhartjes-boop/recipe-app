@@ -342,37 +342,69 @@ proj.parseSync()
     )
   })
 
-  const inSources = Object.values(proj.hash.project.objects.PBXSourcesBuildPhase || {}).some(
-    (ph) => ph && typeof ph === 'object' && (ph.files || []).some((f) => String(f.comment ?? '').includes('SharedStorePlugin.swift')),
-  )
-  const inAppGroup =
-    appGroupKey && (groups[appGroupKey].children || []).some((c) => String(c.comment ?? '').includes('SharedStorePlugin.swift'))
+  // Dilla's own native plugins, which `cap sync` never adds. Each must be BOTH
+  // in a Sources phase (or it silently doesn't compile) AND a child of the App
+  // group (or its path resolves one directory too high and the build fails with
+  // "Build input file cannot be found").
+  const OWN_PLUGINS = ['SharedStorePlugin.swift', 'DillaBrowserPlugin.swift']
+  let changed = false
+  for (const file of OWN_PLUGINS) {
+    const inSources = Object.values(proj.hash.project.objects.PBXSourcesBuildPhase || {}).some(
+      (ph) => ph && typeof ph === 'object' && (ph.files || []).some((f) => String(f.comment ?? '').includes(file)),
+    )
+    const inAppGroup =
+      appGroupKey && (groups[appGroupKey].children || []).some((c) => String(c.comment ?? '').includes(file))
+    if (!appKey || (inSources && inAppGroup)) continue
 
-  // Self-healing: only act when it is NOT already both compiled and correctly
-  // placed. addSourceFile is called WITHOUT a group (the third arg wants a group
-  // KEY, not the name 'App' — passing the name is what orphaned the reference),
-  // then the reference is attached to the App group explicitly so the path
-  // resolves to ios/App/App/SharedStorePlugin.swift.
-  if (appKey && !(inSources && inAppGroup)) {
-    let ref
+    // Constructed by hand rather than via addSourceFile(): the library helper
+    // either orphans the file reference (group passed by NAME) or crashes on a
+    // missing "Plugins" group (no group passed). These four entries mirror the
+    // committed, CI-proven shape for SharedStorePlugin exactly:
+    //   PBXFileReference (child of the App group, so "<group>" resolves to
+    //   ios/App/App/) + PBXBuildFile + a line in the App target's Sources phase.
+    const objects = proj.hash.project.objects
+    const fileRefs = (objects.PBXFileReference = objects.PBXFileReference || {})
+    const buildFiles = (objects.PBXBuildFile = objects.PBXBuildFile || {})
+
+    // Reuse an existing reference (a prior partial state) before minting one.
+    let refId = Object.keys(fileRefs).find(
+      (k) => !k.endsWith('_comment') && String(fileRefs[k]?.path ?? '').replace(/"/g, '') === file,
+    )
+    if (!refId) {
+      refId = proj.generateUuid()
+      fileRefs[refId] = {
+        isa: 'PBXFileReference',
+        name: `"${file}"`,
+        path: `"${file}"`,
+        sourceTree: '"<group>"',
+        fileEncoding: 4,
+        lastKnownFileType: 'sourcecode.swift',
+      }
+      fileRefs[`${refId}_comment`] = file
+    }
+
     if (!inSources) {
-      const file = proj.addSourceFile('SharedStorePlugin.swift', { target: appKey })
-      ref = file?.fileRef
+      const buildId = proj.generateUuid()
+      buildFiles[buildId] = { isa: 'PBXBuildFile', fileRef: refId, fileRef_comment: file }
+      buildFiles[`${buildId}_comment`] = `${file} in Sources`
+      const appPhases = proj.pbxNativeTargetSection()[appKey].buildPhases || []
+      const srcPhaseId = appPhases.find((ph) => String(ph.comment ?? '') === 'Sources')?.value
+      const phase = srcPhaseId && proj.hash.project.objects.PBXSourcesBuildPhase[srcPhaseId]
+      if (phase) {
+        phase.files = phase.files || []
+        phase.files.push({ value: buildId, comment: `${file} in Sources` })
+      }
     }
+
     if (appGroupKey && !inAppGroup) {
-      // Find the file reference uuid (from the add above, or an existing orphan).
-      if (!ref) {
-        const fileRefs = proj.hash.project.objects.PBXFileReference || {}
-        ref = Object.keys(fileRefs).find((k) => String(fileRefs[k]?.name ?? fileRefs[k]?.path ?? '').includes('SharedStorePlugin.swift'))
-      }
-      if (ref) {
-        groups[appGroupKey].children = groups[appGroupKey].children || []
-        groups[appGroupKey].children.push({ value: ref, comment: 'SharedStorePlugin.swift' })
-      }
+      groups[appGroupKey].children = groups[appGroupKey].children || []
+      groups[appGroupKey].children.push({ value: refId, comment: file })
     }
-    writeFileSync(projPath, proj.writeSync())
-    console.log('Ensured SharedStorePlugin.swift is compiled and in the App group.')
+
+    changed = true
+    console.log(`Ensured ${file} is compiled and in the App group.`)
   }
+  if (changed) writeFileSync(projPath, proj.writeSync())
 }
 
 // --- always-run: iPhone-only ------------------------------------------------
