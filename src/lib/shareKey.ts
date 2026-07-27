@@ -50,15 +50,40 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
   const cached = readCache()
   // A key belongs to ONE account. If a different user signs in on this device,
   // the old key must not be reused — it would file their recipes under the
-  // previous user.
+  // previous user. Scrub it from the App Group IMMEDIATELY, before any await
+  // that could fail: a share made mid-switch must fail loudly, never land in
+  // the previous account's library.
+  if (cached && cached.userId !== userId) {
+    try {
+      localStorage.removeItem(LOCAL_CACHE)
+    } catch {
+      /* ignore */
+    }
+    try {
+      await SharedStore.remove({ key: SHARE_KEY_DEFAULTS_KEY })
+    } catch {
+      /* ignore */
+    }
+  }
   if (cached && cached.userId === userId) {
-    const { data } = await supabase
-      .from('share_keys')
-      .select('key')
-      .eq('key', cached.key)
-      .is('revoked_at', null)
-      .maybeSingle()
-    if (data) {
+    try {
+      const { data, error } = await supabase
+        .from('share_keys')
+        .select('key')
+        .eq('key', cached.key)
+        .is('revoked_at', null)
+        .maybeSingle()
+      if (data) {
+        await writeToAppGroup(cached.key)
+        return cached.key
+      }
+      // Query FAILED (offline) — same user, so re-serving the cached key risks
+      // nothing worse than a server-side 401 if it was revoked elsewhere.
+      if (error) {
+        await writeToAppGroup(cached.key)
+        return cached.key
+      }
+    } catch {
       await writeToAppGroup(cached.key)
       return cached.key
     }
@@ -72,6 +97,12 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
   })
   if (error) {
     console.warn('[shareKey] could not register key', error.message)
+    // Better no key (extension says "open Dilla first") than a stale one.
+    try {
+      await SharedStore.remove({ key: SHARE_KEY_DEFAULTS_KEY })
+    } catch {
+      /* ignore */
+    }
     return null
   }
   try {

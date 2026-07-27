@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { apiUrl } from '../lib/api'
 import { SunIcon, MoonIcon, LogOutIcon, TrashIcon, CheckIcon } from '../components/icons'
 import Portal from '../components/Portal'
+import { clearShareKey } from '../lib/shareKey'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -71,7 +72,11 @@ export default function Settings() {
       })
       const body = await res.json().catch(() => null)
       if (!res.ok || !body?.ok) throw new Error(body?.message || 'Could not delete your account.')
-      // Everything server-side is gone; clear the local session and leave.
+      // Everything server-side is gone. Scrub the DEVICE too — without this the
+      // Share Extension keeps the deleted account's key in the App Group and
+      // the next share from this phone fails confusingly (or worse, if a
+      // fallback existed, lands in someone else's library).
+      await clearShareKey()
       await supabase.auth.signOut()
       navigate('/login', { replace: true })
     } catch (e) {

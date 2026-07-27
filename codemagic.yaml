@@ -59,23 +59,10 @@ workflows:
           # and restores it whenever ios/ is recreated; generating it here means
           # the build can never ship the wrong icon regardless of repo state.
           node scripts/gen-icons.mjs
-      - name: Inject share extension token
-        script: |
-          set -e
-          # The Share Extension POSTs directly to the submit endpoint, which is
-          # gated by SHORTCUT_TOKEN. The token is injected into the extension's
-          # Info.plist HERE, on the build machine only — the repo is public, so
-          # it must never be committed. Add SHORTCUT_TOKEN to the 'dilla' env
-          # group in Codemagic (same value as in the local .env).
-          if [ -z "$SHORTCUT_TOKEN" ]; then
-            echo "SHORTCUT_TOKEN is empty — add it to the 'dilla' environment group."
-            echo "Without it the Share Extension cannot authenticate and every share fails."
-            exit 1
-          fi
-          PLIST="ios/App/ShareExtension/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :DillaShortcutToken string $SHORTCUT_TOKEN" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :DillaShortcutToken $SHORTCUT_TOKEN" "$PLIST"
-          echo "Token injected into ShareExtension Info.plist."
+      # NOTE: the extension no longer ships any build-wide token. Every share
+      # authenticates with the per-user share key from the App Group; without
+      # one it fails with an "open Dilla first" message. (A static token in a
+      # public app's binary would be extractable and mapped to the owner.)
       - name: Fetch signing files
         script: |
           # -e so a signing failure fails THIS step loudly. Without it the step

@@ -119,21 +119,14 @@ private func completeAfterPendingNotifications(_ context: NSExtensionContext?, d
 
 class ShareViewController: UIViewController {
 
-    // Who is importing. Prefers the per-user share key the app writes into the
-    // App Group on login — that is what makes a recipe land in the SHARER's
-    // library rather than one shared account, which is required now that the app
-    // is going public.
-    //
-    // Falls back to the old build-wide DillaShortcutToken (injected into
-    // Info.plist by CI) so an install that has not been opened since updating,
-    // or a user still on the iOS Shortcut, keeps working. The server treats that
-    // token as legacy and maps it to the owner's account.
+    // Who is importing: ONLY the per-user share key the app writes into the
+    // App Group on sign-in. There is deliberately no fallback — the old
+    // build-wide token mapped to the owner's account, which meant any share
+    // made before the key existed (fresh install, just switched accounts, a
+    // failed key write) silently filed someone else's recipe into the owner's
+    // library. No key now means a clear "open Dilla first" message instead.
     private var token: String {
-        if let shared = UserDefaults(suiteName: kAppGroupId)?.string(forKey: "dilla-share-key"),
-           !shared.isEmpty {
-            return shared
-        }
-        return (Bundle.main.object(forInfoDictionaryKey: "DillaShortcutToken") as? String) ?? ""
+        UserDefaults(suiteName: kAppGroupId)?.string(forKey: "dilla-share-key") ?? ""
     }
 
     private let card = UIView()
@@ -190,7 +183,7 @@ class ShareViewController: UIViewController {
 
     private func handleShare() {
         guard !token.isEmpty else {
-            failFast("This build is missing its access token — reinstall from TestFlight.")
+            failFast("Open Dilla and sign in first — then sharing saves to your account.")
             return
         }
 
