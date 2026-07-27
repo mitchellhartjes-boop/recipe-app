@@ -36,10 +36,15 @@ const POST_PATTERNS = {
   pinterest: /pinterest\.[a-z.]+\/pin\/[^/]+/i,
 }
 
+// No site: operator — Serper's entry tier rejects advanced operators with a 400
+// (verified live: operator queries fail, identical plain queries succeed).
+// Instead the query is biased with the platform's name and PRECISION comes from
+// POST_PATTERNS below: only real post URLs on the right domain survive, so a
+// stray blog result in the TikTok tab is filtered, not shown.
 const SITE_QUERY = {
-  tiktok: (q) => `site:tiktok.com ${q} recipe`,
-  instagram: (q) => `site:instagram.com ${q} recipe`,
-  pinterest: (q) => `site:pinterest.com/pin ${q} recipe`,
+  tiktok: (q) => `${q} recipe tiktok`,
+  instagram: (q) => `${q} recipe instagram reel`,
+  pinterest: (q) => `${q} recipe pinterest`,
   web: (q) => `${q} recipe`,
 }
 
@@ -50,7 +55,7 @@ async function serperSearch(query, apiKey) {
     const res = await fetch('https://google.serper.dev/search', {
       method: 'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: query, num: 20 }),
+      body: JSON.stringify({ q: query, num: 10 }),
       signal: ctl.signal,
     })
     if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`)
