@@ -1,0 +1,154 @@
+# App Store submission package
+
+Everything needed to fill out App Store Connect for the first Dilla release.
+Copy-paste the text blocks verbatim; checklists at the bottom.
+
+---
+
+## 1. App Information
+
+| Field | Value |
+|---|---|
+| Name | `Dilla: Recipe Vault` (already set on the app record) |
+| Subtitle (30 chars max) | `Save recipes from anywhere` |
+| Primary category | Food & Drink |
+| Secondary category | Lifestyle (optional) |
+| Content rights | Does not contain third-party content |
+| Age rating | Answer **Yes** to "Unrestricted Web Access" (the Discover tab's built-in browser). Everything else No. Result: **17+**. This is normal for recipe apps with a browser — Paprika is 17+ for the same reason. |
+| Copyright | `© 2026 David Mitchell Hartjes` |
+| Support URL | `https://recipe-vault-mh.netlify.app/support` |
+| Marketing URL (optional) | `https://recipe-vault-mh.netlify.app` |
+| Privacy Policy URL | `https://recipe-vault-mh.netlify.app/privacy` |
+
+## 2. Promotional text (170 chars max — editable anytime without review)
+
+```
+Share a reel, get the full recipe. Dilla turns cooking videos, pins, and blog posts into clean step-by-step recipes — even when the recipe only lives in the video.
+```
+
+## 3. Description
+
+```
+Your saved folder is full of recipes you'll never find again. Dilla fixes that.
+
+Found a recipe anywhere — a reel, a pin, a blog, a video? Share it to Dilla and keep scrolling. Dilla reads it in the background, writes it out properly with every amount and step, and sends you a notification when it's in your library. No copying, no typing, no screenshots of captions.
+
+WORKS WITH THE WAY YOU ACTUALLY FIND RECIPES
+• Instagram reels and posts — even when the recipe is only spoken in the video, Dilla watches and listens, then writes it out
+• "Link in bio" recipes — Dilla follows the trail to the creator's site and grabs the real recipe
+• TikTok videos, Pinterest pins, recipe blogs, and websites
+• Screenshots — share a photo of any recipe and Dilla reads it
+
+BUILT FOR THE COUNTER
+• Cook Mode shows one big step at a time, with the exact ingredients that step needs
+• Times written in a step become one-tap timers that keep counting while you move on
+• The screen stays awake while your hands are covered in flour
+• Scale the servings and every quantity rescales
+
+PLAN THE WEEK
+• Send a recipe's ingredients to your grocery list — just the ones you're missing
+• Sort your library by most made, highest rated, or newest
+• Rate recipes and track how many times you've cooked them
+
+DISCOVER
+• Search for new recipes right inside Dilla and save what looks good on the spot
+
+FREE TO START
+Save up to 20 recipes a month free, including video extractions. Dilla Pro raises that to 200 a month for $4.99/month or $29.99/year.
+
+Your recipes are yours: no ads, no tracking, delete your account (and everything with it) anytime from Settings.
+```
+
+## 4. Keywords (100 chars max, comma-separated)
+
+```
+cookbook,meal planner,grocery list,cooking,video,reel,pin,save,import,organizer,keeper,dinner
+```
+
+Notes: "recipe" and "vault" are already indexed from the app name — don't waste
+keyword characters repeating them. Brand names (Instagram/TikTok/Pinterest) are
+deliberately excluded from name/subtitle/keywords to avoid a Guideline 2.3.7
+trademark-metadata rejection; the description's factual "works with" mentions
+are standard interoperability language and fine.
+
+## 5. App Privacy questionnaire
+
+Data collection: **Yes, we collect data.**
+
+| Data type | Collected? | Linked to identity? | Used for tracking? | Purpose |
+|---|---|---|---|---|
+| Contact Info → Email Address | Yes | Yes | No | App Functionality (account sign-in) |
+| User Content → Photos or Videos | Yes | Yes | No | App Functionality (screenshot imports) |
+| User Content → Other User Content | Yes | Yes | No | App Functionality (saved recipes, grocery list) |
+| Identifiers → User ID | Yes | Yes | No | App Functionality (account, subscription status) |
+| Identifiers → Device ID | Yes | Yes | No | App Functionality (push notification token) |
+| Purchases → Purchase History | Yes | Yes | No | App Functionality (subscription entitlement) |
+| Usage Data → Product Interaction | Yes | Yes | No | App Functionality (monthly import count for plan limits) |
+
+Everything else: Not collected. Tracking: **No** (nothing leaves the app for
+ads/data brokers; no ATT prompt needed). Result badge: "Data Linked to You,"
+no "Data Used to Track You."
+
+## 6. App Review Information
+
+**Demo account** (create before submitting):
+1. Sign up in the app as `dilla.review@gmail.com` (or any address you control) with a strong password.
+2. Import 5–6 recipes into it so the reviewer sees a real library (paste a few blog URLs into Add — no social accounts needed).
+3. Enter that email + password in App Store Connect → App Review Information → Sign-In Information.
+
+**Notes for the reviewer** (paste into the Notes field):
+
+```
+Dilla saves recipes the user finds elsewhere into a personal, private library.
+
+HOW TO TEST IMPORT (no social media account needed):
+1) Open any recipe page in Safari (e.g. a food blog), tap Share, choose Dilla — a notification confirms when it's saved. Or:
+2) In the app, tap Add and paste any recipe URL.
+
+The Share Extension uploads the shared link/image in the background; extraction runs server-side and the app notifies when the recipe is ready.
+
+DISCOVER TAB: opens the selected platform's own public website in an in-app browser. Saving is always user-initiated (the "Save this recipe" bar). Dilla does not display feeds of platform content.
+
+SUBSCRIPTIONS: Dilla Pro (monthly/annual, in this submission) raises the monthly import limit from 20 to 200. Purchases are processed by StoreKit via RevenueCat; the demo account is on the free tier, which is fully functional for review.
+
+ACCOUNT DELETION: Settings → Delete account (required by 5.1.1(v)) — removes all data immediately.
+```
+
+## 7. Screenshots
+
+Required: one set at **6.9-inch** (1320 × 2868 portrait). Apple auto-scales it
+for smaller sizes. Take raw screenshots on the iPhone in this order, then hand
+them over — they'll be framed/captioned into final PNGs:
+
+1. **Library** (All recipes, a healthy grid with covers)
+2. **Recipe page** (a good-looking recipe: cover, rating, ingredients visible)
+3. **Cook Mode** (a step with a running timer chip + "You'll need" chips visible)
+4. **Add screen** or a just-imported success moment
+5. **Grocery list** (a plausible week's list)
+6. **Settings → How to use Dilla** (shows the share flow) — or a Discover browser view
+
+Tips: seed the demo account first so the library looks alive; screenshot in
+light mode for the store set; avoid personal info in the status bar area.
+
+The subscription products already have their review screenshot uploaded
+(padded 1290×2796) — nothing more needed there.
+
+## 8. Submission-day checklist (in order)
+
+1. [ ] **Server flag: turn `DISCOVER_SEARCH_NATIVE` OFF** in Netlify env (Claude does this — native app must show browser-mode Discover during review; web keeps `DISCOVER_SEARCH_ENABLED=true`).
+2. [ ] Final Codemagic build (carries cook mode, entitlement fix, onboarding polish) → wait for TestFlight processing → smoke-test on phone.
+3. [ ] In App Store Connect → the version page: select that build.
+4. [ ] Same page → **In-App Purchases and Subscriptions** section → **add BOTH** `dilla_pro_monthly` and `dilla_pro_yearly` (this is what activates the first subscription group).
+5. [ ] Upload screenshots; paste description/promo/keywords from this doc.
+6. [ ] App Privacy answers from §5 (one-time).
+7. [ ] Age rating questionnaire (§1 — Unrestricted Web Access: Yes).
+8. [ ] Demo account created + seeded + creds entered (§6); review notes pasted.
+9. [ ] If ASC asks about EU Digital Services Act trader status: answering "not a trader" limits EU availability; answering trader requires publishing a contact address in the EU storefront. Either is fine to start — pick and move on.
+10. [ ] Submit for review.
+
+## 9. After approval
+
+- Flip `DISCOVER_SEARCH_NATIVE=true` (Claude) — native result cards go live server-side, no app update.
+- Verify the paywall shows real prices on the App Store build; do one real purchase + "Restore Purchases" sanity check.
+- Watch the RevenueCat webhook flip the account to pro (Settings shows 200/mo).
+- Consider retaking the subscription review screenshot with live prices for the next metadata update (optional).

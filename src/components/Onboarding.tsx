@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon } from './icons'
+import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon, ClockIcon, SearchIcon, CompassIcon } from './icons'
 import { markOnboarded } from '../lib/onboarding'
 import { useAuth } from '../lib/auth'
 import { promptForNotifications, registerPushNow } from '../lib/usePushRegistration'
@@ -8,6 +8,107 @@ import { promptForNotifications, registerPushNow } from '../lib/usePushRegistrat
 // Drawn with the app's own tokens (paper cards, stone shapes, paprika accents)
 // so they read as Dilla, hold up in dark mode for free, and never look like a
 // pasted screenshot that ages out of date.
+
+/** A shelf of saved recipe cards — the library at a glance. */
+function LibraryArt() {
+  return (
+    <div className="mb-6 flex select-none items-end justify-center gap-2.5" aria-hidden="true">
+      <div className="w-20 rounded-2xl bg-paper p-2 opacity-80 shadow-card">
+        <div className="flex h-14 items-center justify-center rounded-xl bg-paprika-50 text-2xl">🍜</div>
+        <div className="mt-1.5 h-1.5 w-3/4 rounded-full bg-stone-200" />
+      </div>
+      <div className="w-24 rounded-2xl bg-paper p-2 shadow-card">
+        <div className="flex h-20 items-center justify-center rounded-xl bg-paprika-50 text-3xl">🌮</div>
+        <div className="mt-2 h-1.5 w-3/4 rounded-full bg-stone-200" />
+        <div className="mt-1.5 text-[9px] leading-none text-amber-400">★★★★★</div>
+      </div>
+      <div className="w-20 rounded-2xl bg-paper p-2 opacity-80 shadow-card">
+        <div className="flex h-14 items-center justify-center rounded-xl bg-paprika-50 text-2xl">🍪</div>
+        <div className="mt-1.5 h-1.5 w-2/3 rounded-full bg-stone-200" />
+      </div>
+    </div>
+  )
+}
+
+/** A cooking video becoming a written-out recipe. */
+function VideoArt() {
+  return (
+    <div className="mb-6 flex select-none items-center justify-center gap-3" aria-hidden="true">
+      <div className="w-24 shrink-0 rounded-2xl bg-paper p-2 shadow-card">
+        <div className="relative flex h-20 items-center justify-center rounded-xl bg-stone-800 text-3xl">
+          🍳
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 pl-0.5 text-[9px] text-stone-900">▶</span>
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 w-2/3 rounded-full bg-stone-200" />
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 shrink-0 text-paprika-600">
+        <path d="M4 12h14M13 6l6 6-6 6" />
+      </svg>
+      <div className="w-24 shrink-0 rounded-2xl bg-paper p-2.5 shadow-card">
+        <div className="h-1.5 w-1/2 rounded-full bg-paprika-300" />
+        <div className="mt-2 h-1.5 w-full rounded-full bg-stone-200" />
+        <div className="mt-1 h-1.5 w-5/6 rounded-full bg-stone-200" />
+        <div className="mt-1 h-1.5 w-full rounded-full bg-stone-200" />
+        <div className="mt-1 h-1.5 w-2/3 rounded-full bg-stone-200" />
+        <div className="mt-2 flex items-center gap-1">
+          <CheckIcon className="h-3 w-3 text-paprika-700" />
+          <div className="h-1.5 w-1/2 rounded-full bg-stone-200" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** A mini Cook Mode card: step lines, a live timer, an ingredient chip. */
+function CookArt() {
+  return (
+    <div className="mb-6 flex select-none justify-center" aria-hidden="true">
+      <div className="w-full max-w-[250px] rounded-2xl bg-paper p-3.5 text-left shadow-card">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-paprika-700">Step 3 of 7</p>
+        <div className="mt-2 h-1.5 w-full rounded-full bg-stone-200" />
+        <div className="mt-1 h-1.5 w-4/5 rounded-full bg-stone-200" />
+        <div className="mt-1 h-1.5 w-3/5 rounded-full bg-stone-200" />
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className="flex items-center gap-1 rounded-full border border-paprika-200 bg-paprika-50 px-2 py-1 text-[10px] font-semibold tabular-nums text-paprika-800">
+            <ClockIcon className="h-3 w-3" /> 11:42
+          </span>
+          <span className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 text-[10px] text-stone-600">
+            <span className="flex h-3 w-3 items-center justify-center rounded-full bg-paprika-600 text-white">
+              <CheckIcon className="h-2 w-2" />
+            </span>
+            2 cups stock
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** A search pill and fresh finds — the Discover tab in miniature. */
+function DiscoverArt() {
+  return (
+    <div className="mb-6 select-none" aria-hidden="true">
+      <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-paper py-2 pl-3 pr-4 shadow-card">
+        <SearchIcon className="h-3.5 w-3.5 text-stone-400" />
+        <span className="text-[11px] font-medium text-ink">chocolate chip cookies</span>
+      </div>
+      <div className="mt-3 flex items-start justify-center gap-2">
+        <div className="w-16 rounded-xl bg-paper p-1.5 opacity-80 shadow-card">
+          <div className="flex h-12 items-center justify-center rounded-lg bg-paprika-50 text-xl">🥞</div>
+        </div>
+        <div className="w-[72px] rounded-xl bg-paper p-1.5 shadow-card">
+          <div className="flex h-14 items-center justify-center rounded-lg bg-paprika-50 text-2xl">🍪</div>
+          <div className="mx-auto mt-1.5 w-fit rounded-full bg-paprika-700 px-2 py-0.5 text-[8px] font-semibold text-white">Save</div>
+        </div>
+        <div className="w-16 rounded-xl bg-paper p-1.5 opacity-80 shadow-card">
+          <div className="flex h-12 items-center justify-center rounded-lg bg-paprika-50 text-xl">🍩</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /** A post card → share → Dilla, with the notification that closes the loop. */
 function ShareFlowArt() {
@@ -80,6 +181,7 @@ type Slide = {
 const SLIDES: Slide[] = [
   {
     icon: <BookIcon className="h-8 w-8" />,
+    art: <LibraryArt />,
     title: 'Your recipes, all in one place',
     body: (
       <>
@@ -123,6 +225,7 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <CheckIcon className="h-8 w-8" />,
+    art: <VideoArt />,
     title: 'Recipe’s in the video? Still works',
     body: (
       <>
@@ -136,12 +239,25 @@ const SLIDES: Slide[] = [
     ),
   },
   {
+    icon: <CompassIcon className="h-8 w-8" />,
+    art: <DiscoverArt />,
+    title: 'Find your next favorite',
+    body: (
+      <>
+        The <b>Discover</b> tab searches TikTok, Pinterest, Instagram, and the web without leaving
+        Dilla. See something good? Save it on the spot.
+      </>
+    ),
+  },
+  {
     icon: <FlameIcon className="h-8 w-8" />,
+    art: <CookArt />,
     title: 'Built for the counter',
     body: (
       <>
-        Tap <b>Start cooking</b> for one big step at a time, with the screen kept awake while your
-        hands are busy. Scale the servings and every amount rescales with it.
+        Tap <b>Start cooking</b> for one big step at a time — each step shows just the ingredients
+        it needs, and any time in a step becomes a <b>one-tap timer</b>. The screen stays awake
+        while your hands are busy, and scaling the servings rescales every amount.
       </>
     ),
   },
