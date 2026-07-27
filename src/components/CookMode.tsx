@@ -145,7 +145,13 @@ export default function CookMode({
     timers.find((t) => t.stepNo === i + 1 && t.totalSeconds === seconds && !t.done)
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-cream pt-safe-t pb-safe-b">
+    // h-screen is the fallback; 100dvh (where supported) tracks iOS Safari's
+    // collapsing toolbars so the controls sit at the VISIBLE bottom edge —
+    // with plain inset-0 they render below the fold until the chrome hides.
+    <div
+      className="fixed inset-x-0 top-0 z-50 flex h-screen flex-col bg-cream pt-safe-t pb-safe-b"
+      style={{ height: '100dvh' }}
+    >
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button
@@ -231,11 +237,14 @@ export default function CookMode({
       )}
 
       {/* ── The step ───────────────────────────────────────────── */}
+      {/* min-h-0 is what makes this pane actually SCROLL instead of growing:
+          without it a long step inflates the flex column and pushes the
+          Back/Next bar off-screen. */}
       <div
         ref={stepPane}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className="flex-1 overflow-y-auto px-6 pb-4 pt-6"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 pt-6"
       >
         <div key={i} className="animate-step-in mx-auto max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paprika-700">Step {i + 1}</p>
@@ -305,7 +314,7 @@ export default function CookMode({
       {sheet && (
         <div className="absolute inset-0 z-10 flex flex-col bg-black/40" onClick={() => setSheet(false)}>
           <div
-            className="mt-auto max-h-[72%] overflow-y-auto rounded-t-3xl bg-paper px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
+            className="mt-auto max-h-[72%] overflow-y-auto overscroll-contain rounded-t-3xl bg-paper px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-stone-300" />
