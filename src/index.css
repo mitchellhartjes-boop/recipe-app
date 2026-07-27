@@ -85,3 +85,19 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Cook Mode: new step slides in gently; a finished timer breathes until cleared. */
+@keyframes cook-step-in {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-step-in {
+  animation: cook-step-in 0.22s ease-out;
+}
+@keyframes timer-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+.animate-timer-done {
+  animation: timer-breathe 1.2s ease-in-out infinite;
+}
