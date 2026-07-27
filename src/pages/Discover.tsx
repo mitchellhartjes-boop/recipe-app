@@ -16,7 +16,7 @@ import { SearchIcon } from '../components/icons'
 //    the native browser with its persistent "Save this recipe" bar. Also the
 //    fallback whenever results mode is off or a search errors.
 
-type Platform = 'tiktok' | 'pinterest' | 'instagram' | 'web'
+type Platform = 'all' | 'tiktok' | 'pinterest' | 'instagram' | 'web'
 
 type SearchResult = {
   platform: Platform
@@ -28,6 +28,7 @@ type SearchResult = {
 }
 
 const PLATFORMS: { key: Platform; label: string; emoji: string }[] = [
+  { key: 'all', label: 'All', emoji: '✨' },
   { key: 'tiktok', label: 'TikTok', emoji: '🎵' },
   { key: 'pinterest', label: 'Pinterest', emoji: '📌' },
   { key: 'instagram', label: 'Instagram', emoji: '📷' },
@@ -45,6 +46,9 @@ function searchUrl(platform: Platform, query: string): string {
       // Instagram's keyword search wants a signed-in session; the browser keeps
       // the user's login between visits, so this works after one sign-in.
       return `https://www.instagram.com/explore/search/keyword/?q=${q}`
+    // "All" has no single site to browse — Google is the honest catch-all when
+    // a search has to fall back to the browser.
+    case 'all':
     case 'web':
       return `https://www.google.com/search?q=${q}%20recipe`
   }
@@ -81,7 +85,7 @@ async function callSearch(body: Record<string, unknown>): Promise<{ enabled: boo
 export default function Discover() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [platform, setPlatform] = useState<Platform>('tiktok')
+  const [platform, setPlatform] = useState<Platform>('all')
   const [recent, setRecent] = useState<string[]>(loadRecent)
   const native = useMemo(() => discoverBrowserAvailable(), [])
 
@@ -160,13 +164,15 @@ export default function Discover() {
   }
 
   const platformLabel = PLATFORMS.find((p) => p.key === platform)?.label
+  // Where "Browse →" actually goes; for All that's Google, so say so.
+  const browseLabel = platform === 'all' ? 'Google' : platformLabel
 
   return (
     <div className="mx-auto max-w-xl">
       <h1 className="font-display text-3xl font-semibold tracking-tight">Discover</h1>
       <p className="mt-2 text-sm text-stone-500">
-        Craving something? Search TikTok, Pinterest, or the web — anything that looks good saves
-        straight to your library.
+        Craving something? Search TikTok, Instagram, Pinterest, and the web all at once — anything
+        that looks good saves straight to your library.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 rounded-2xl bg-paper p-5 shadow-card">
@@ -204,7 +210,7 @@ export default function Discover() {
           disabled={!query.trim() || searching}
           className="mt-4 w-full rounded-xl bg-paprika-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 active:scale-[0.98] disabled:opacity-50"
         >
-          {searching ? 'Searching…' : `Search ${platformLabel}`}
+          {searching ? 'Searching…' : platform === 'all' ? 'Search everywhere' : `Search ${platformLabel}`}
         </button>
 
         {!native && !resultsMode && (
@@ -227,13 +233,13 @@ export default function Discover() {
               onClick={() => void openDiscoverBrowser(searchUrl(platform, query))}
               className="text-xs font-medium text-paprika-700 hover:underline"
             >
-              Browse on {platformLabel} →
+              Browse on {browseLabel} →
             </button>
           </div>
 
           {results.length === 0 && (
             <p className="rounded-2xl bg-paper px-4 py-6 text-center text-sm text-stone-500 shadow-card">
-              Nothing found — try different words, or browse {platformLabel} directly.
+              Nothing found — try different words, or browse {browseLabel} directly.
             </p>
           )}
 
