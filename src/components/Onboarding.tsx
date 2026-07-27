@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon, ClockIcon, SearchIcon, CompassIcon } from './icons'
 import { markOnboarded } from '../lib/onboarding'
+import Portal from './Portal'
 import { useAuth } from '../lib/auth'
 import { promptForNotifications, registerPushNow } from '../lib/usePushRegistration'
 
@@ -302,6 +303,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex flex-col bg-cream pt-safe-t pb-safe-b">
       <div className="flex justify-end px-4 pt-3">
         {!last && (
@@ -338,5 +340,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         </button>
       </div>
     </div>
+    </Portal>
   )
 }

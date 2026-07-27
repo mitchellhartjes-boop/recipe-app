@@ -5,6 +5,7 @@ import { useTheme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { apiUrl } from '../lib/api'
 import { SunIcon, MoonIcon, LogOutIcon, TrashIcon, CheckIcon } from '../components/icons'
+import Portal from '../components/Portal'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -201,6 +202,7 @@ export default function Settings() {
       <p className="px-1 text-center text-xs text-stone-400">Dilla · Recipe Vault</p>
 
       {confirming && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 pb-safe-b sm:items-center" onClick={() => !deleting && setConfirming(false)}>
           <div
             className="w-full max-w-sm rounded-3xl bg-cream p-6 shadow-card"
@@ -242,6 +244,7 @@ export default function Settings() {
             </button>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   )

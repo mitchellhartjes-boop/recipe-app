@@ -3,6 +3,7 @@ import type { Ingredient } from '../lib/types'
 import { groupIngredients } from '../lib/groupIngredients'
 import { groceryName } from '../lib/groceryName'
 import { CheckIcon, CloseIcon, CartIcon } from './icons'
+import Portal from './Portal'
 
 // Slide-up sheet to pick which ingredients go to the grocery list. Everything is
 // pre-checked (the common case is "most of them"); the user unchecks what they
@@ -38,6 +39,7 @@ export default function GrocerySheet({
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={onClose}>
       <div
         className="flex max-h-[88%] flex-col rounded-b-3xl bg-paper pt-safe-t"
@@ -102,5 +104,6 @@ export default function GrocerySheet({
         </div>
       </div>
     </div>
+    </Portal>
   )
 }

@@ -11,7 +11,10 @@ import { adminClient as usageAdmin, userFromJwt, reserveImport, refundImport, li
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  // Authorization is REQUIRED here: the native app calls from
+  // capacitor://localhost (cross-origin), and a preflight that doesn't allow
+  // the auth header makes WebKit fail every request with "Load failed".
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
 
 function json(body, status = 200) {

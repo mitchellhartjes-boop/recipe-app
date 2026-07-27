@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Category } from '../lib/categories'
 import { CheckIcon, CloseIcon, PlusIcon } from './icons'
+import Portal from './Portal'
 
 // Sheet for choosing which category tiles appear on the home screen, and for
 // adding your own. Opens from the top (same as the grocery picker) so the list
@@ -32,6 +33,7 @@ export default function CategoryEditor({
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={onClose}>
       <div
         className="flex max-h-[88%] flex-col rounded-b-3xl bg-paper pt-safe-t"
@@ -108,5 +110,6 @@ export default function CategoryEditor({
         </form>
       </div>
     </div>
+    </Portal>
   )
 }

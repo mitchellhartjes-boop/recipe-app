@@ -3,6 +3,7 @@ import { CloseIcon, CheckIcon, ClockIcon, FlameIcon, ListIcon, ChevronLeftIcon }
 import type { IngredientGroup } from '../lib/groupIngredients'
 import type { Recipe } from '../lib/types'
 import { useWakeLock } from '../lib/useWakeLock'
+import Portal from './Portal'
 import {
   ingredientsForStep,
   timersForStep,
@@ -145,9 +146,11 @@ export default function CookMode({
     timers.find((t) => t.stepNo === i + 1 && t.totalSeconds === seconds && !t.done)
 
   return (
-    // h-screen is the fallback; 100dvh (where supported) tracks iOS Safari's
-    // collapsing toolbars so the controls sit at the VISIBLE bottom edge —
-    // with plain inset-0 they render below the fold until the chrome hides.
+    // Portal: escape Layout's animated wrapper so `fixed` anchors to the
+    // SCREEN (see Portal.tsx). h-screen is the fallback; 100dvh (where
+    // supported) tracks iOS Safari's collapsing toolbars so the controls sit
+    // at the VISIBLE bottom edge.
+    <Portal>
     <div
       className="fixed inset-x-0 top-0 z-50 flex h-screen flex-col bg-cream pt-safe-t pb-safe-b"
       style={{ height: '100dvh' }}
@@ -407,5 +410,6 @@ export default function CookMode({
         )}
       </div>
     </div>
+    </Portal>
   )
 }
