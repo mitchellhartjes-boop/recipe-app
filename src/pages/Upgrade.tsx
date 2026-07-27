@@ -8,6 +8,7 @@ import {
   getProOffering,
   purchasePro,
   restorePurchases,
+  purchaseDiagnostics,
   type ProOffering,
 } from '../lib/purchases'
 import { CheckIcon, FlameIcon } from '../components/icons'
@@ -32,6 +33,9 @@ export default function Upgrade() {
   const [chosen, setChosen] = useState<'monthly' | 'annual'>('monthly')
   const [done, setDone] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // Triple-tapping the empty-plans message reveals the StoreKit/RevenueCat
+  // diagnostic trail — a debugging door for TestFlight, invisible otherwise.
+  const [diagTaps, setDiagTaps] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -116,9 +120,19 @@ export default function Upgrade() {
       ) : loading ? (
         <p className="mt-6 text-center text-sm text-stone-400">Loading plans…</p>
       ) : !offering || (!offering.monthly && !offering.annual) ? (
-        <p className="mt-6 rounded-2xl bg-paper p-5 text-center text-sm text-stone-500 shadow-card">
-          Plans aren’t available right now — try again in a little while.
-        </p>
+        <div
+          className="mt-6 rounded-2xl bg-paper p-5 text-center shadow-card"
+          onClick={() => setDiagTaps((n) => n + 1)}
+        >
+          <p className="text-sm text-stone-500">
+            Plans aren’t available right now — try again in a little while.
+          </p>
+          {diagTaps >= 3 && (
+            <pre className="mt-3 whitespace-pre-wrap break-all text-left font-mono text-[10px] leading-relaxed text-stone-400">
+              {`user: ${session?.user?.id ?? 'signed out'}\n${purchaseDiagnostics()}`}
+            </pre>
+          )}
+        </div>
       ) : (
         <>
           <div className="mt-5 space-y-2.5">
