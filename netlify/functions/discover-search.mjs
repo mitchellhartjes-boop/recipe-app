@@ -13,6 +13,7 @@
 // for: if a platform or App Review ever objects, this turns off server-side
 // with no app update.
 import { userFromJwt } from './_lib/usage.mjs'
+import { fetchPageOgImage, WEB_UA } from './_lib/extract.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,22 +49,104 @@ const SITE_QUERY = {
   web: (q) => `${q} recipe`,
 }
 
-async function serperSearch(query, apiKey) {
+async function serper(endpoint, query, apiKey, num = 10) {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), 6000)
   try {
-    const res = await fetch('https://google.serper.dev/search', {
+    const res = await fetch(`https://google.serper.dev/${endpoint}`, {
       method: 'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: query, num: 10 }),
+      body: JSON.stringify({ q: query, num }),
       signal: ctl.signal,
     })
     if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`)
-    const body = await res.json()
-    return Array.isArray(body?.organic) ? body.organic : []
+    return await res.json()
   } finally {
     clearTimeout(timer)
   }
+}
+
+const serperSearch = async (query, apiKey) => {
+  const body = await serper('search', query, apiKey)
+  return Array.isArray(body?.organic) ? body.organic : []
+}
+
+// Google's IMAGE index, which solves two problems at once: every hit carries a
+// thumbnail, and Pinterest pins — nearly absent from the text index's top
+// results — dominate image results for recipe queries. Never throws: images are
+// an enhancement, and a failure here must not kill a search that has organic hits.
+const serperImages = async (query, apiKey) => {
+  try {
+    // 30 results, because only a fraction survive the post-URL filter — with 10,
+    // a Pinterest search can come back with two pins.
+    const body = await serper('images', query, apiKey, 30)
+    return (Array.isArray(body?.images) ? body.images : [])
+      .filter((i) => i && typeof i.link === 'string')
+      .map((i) => ({
+        link: i.link,
+        title: typeof i.title === 'string' ? i.title : '',
+        // gstatic thumbnails are small but never hotlink-blocked and never
+        // expire — the right trade for a 72px card.
+        thumbnail: i.thumbnailUrl || i.imageUrl || null,
+      }))
+  } catch {
+    return []
+  }
+}
+
+const normalizeKey = (url) => String(url).replace(/[?#].*$/, '').replace(/\/$/, '')
+
+// Identity key for a post, so the same reel/video/pin matches across the text
+// index, the image index, and board feeds even when hosts, slugs, or tracking
+// params differ (www vs bare host, /pin/<slug>--<id> vs /pin/<id>, ?igsh=…).
+const postKey = (platform, link) => {
+  const s = String(link)
+  let m
+  if (platform === 'instagram' && (m = /instagram\.com\/(?:reels?|p)\/([A-Za-z0-9_-]+)/i.exec(s))) return `ig:${m[1]}`
+  if (platform === 'tiktok' && (m = /tiktok\.com\/@[^/]+\/video\/(\d+)/i.exec(s))) return `tt:${m[1]}`
+  if (platform === 'pinterest' && (m = /\/pin\/(?:[^/]*?--)?(\d+)/.exec(s))) return `pin:${m[1]}`
+  return normalizeKey(s)
+}
+
+// Pins from a public board via Pinterest's widgets API — the same sanctioned
+// pidgets family the import path already uses to resolve pins. Boards matter
+// because Google ranks BOARD pages far better than individual pins: for many
+// queries the image+text indexes carry only 2-3 pin links but several boards,
+// and one board feed carries ~25 pins with images. Never throws.
+async function fetchBoardPins(user, board, ms) {
+  try {
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), ms)
+    const res = await fetch(
+      `https://widgets.pinterest.com/v3/pidgets/boards/${encodeURIComponent(user)}/${encodeURIComponent(board)}/pins/`,
+      { headers: { 'User-Agent': WEB_UA, Accept: 'application/json' }, signal: ctl.signal },
+    ).finally(() => clearTimeout(t))
+    if (!res.ok) return []
+    const body = await res.json()
+    const pins = body?.data?.pins ?? body?.data?.[0]?.pins ?? []
+    const fallbackTitle = board.replace(/[-_]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+    return (Array.isArray(pins) ? pins : [])
+      .map((p) => ({
+        id: p?.id != null ? String(p.id) : null,
+        title: (typeof p?.description === 'string' && p.description.trim().slice(0, 140)) || fallbackTitle,
+        thumbnail: p?.images?.['237x']?.url ?? null,
+      }))
+      .filter((p) => p.id && p.thumbnail)
+  } catch {
+    return []
+  }
+}
+
+// Board URLs are exactly two path segments (/<user>/<board-slug>/) where the
+// first isn't one of Pinterest's reserved sections.
+const RESERVED_PIN_PATHS = new Set([
+  'pin', 'ideas', 'search', 'source', 'today', 'explore', 'videos', 'resource',
+  'discover', 'topics', 'categories', 'about', 'business', 'settings', '_',
+])
+function boardFromUrl(link) {
+  const m = /^https?:\/\/(?:[a-z]{1,3}\.)?pinterest\.[a-z.]+\/([^/?#]+)\/([^/?#]+)\/?$/i.exec(String(link))
+  if (!m || RESERVED_PIN_PATHS.has(m[1].toLowerCase())) return null
+  return { user: m[1], board: m[2] }
 }
 
 // TikTok's oEmbed: full caption as title, author, thumbnail — free, documented.
@@ -113,15 +196,27 @@ export default async (req) => {
   if (!query) return json({ enabled: true, results: [] })
 
   try {
-    const organic = await serperSearch(SITE_QUERY[platform](query), process.env.SERPER_API_KEY)
+    const apiKey = process.env.SERPER_API_KEY
+    const built = SITE_QUERY[platform](query)
+    // Text + image index in parallel — 2 credits (~0.1¢) per search.
+    const [organic, images] = await Promise.all([serperSearch(built, apiKey), serperImages(built, apiKey)])
 
     const pattern = POST_PATTERNS[platform]
+    const matches = (link) => (pattern ? pattern.test(link) : true)
+
+    const imgHits = images.filter((i) => matches(i.link))
+    const thumbByPost = new Map()
+    for (const i of imgHits) {
+      const key = postKey(platform, i.link)
+      if (i.thumbnail && !thumbByPost.has(key)) thumbByPost.set(key, i.thumbnail)
+    }
+
     const seen = new Set()
     const hits = organic
       .filter((r) => r && typeof r.link === 'string' && typeof r.title === 'string')
-      .filter((r) => (pattern ? pattern.test(r.link) : true))
+      .filter((r) => matches(r.link))
       .filter((r) => {
-        const key = r.link.replace(/[?#].*$/, '')
+        const key = postKey(platform, r.link)
         if (seen.has(key)) return false
         seen.add(key)
         return true
@@ -129,10 +224,83 @@ export default async (req) => {
       .slice(0, 10)
       .map((r) => ({
         platform,
-        url: r.link.replace(/[?#].*$/, ''),
+        url: normalizeKey(r.link),
         title: r.title.replace(/\s*\|\s*TikTok\s*$/i, '').trim(),
         snippet: typeof r.snippet === 'string' ? r.snippet : null,
+        thumbnail: thumbByPost.get(postKey(platform, r.link)) ?? null,
       }))
+
+    // Promote image-index hits the text index missed into full results. Pin
+    // pages barely rank in text results, so for Pinterest this IS the recall:
+    // "tacos" goes from ~1 text hit to a card list. Web stays organic-only —
+    // image titles are messier than a blog's real title + snippet.
+    if (platform !== 'web') {
+      for (const i of imgHits) {
+        if (hits.length >= 10) break
+        const key = postKey(platform, i.link)
+        if (seen.has(key)) continue
+        seen.add(key)
+        hits.push({
+          platform,
+          url: normalizeKey(i.link),
+          title: (i.title || query).replace(/\s*\|\s*TikTok\s*$/i, '').trim(),
+          snippet: null,
+          thumbnail: i.thumbnail,
+        })
+      }
+    }
+
+    // Pinterest recall, part two: harvest pins from the top BOARDS the search
+    // surfaced (board pages rank where pin pages don't; measured live: "tacos"
+    // put 2 pin links in 30 image results, while boards are all over both
+    // indexes). Concurrent, bounded, and additive only up to the 10-card cap.
+    let boardDebug = null
+    if (platform === 'pinterest' && hits.length < 10) {
+      const boards = []
+      const seenBoards = new Set()
+      for (const link of [...organic.map((r) => r?.link), ...images.map((i) => i.link)]) {
+        const b = typeof link === 'string' ? boardFromUrl(link) : null
+        const bKey = b && `${b.user}/${b.board}`.toLowerCase()
+        if (!b || seenBoards.has(bKey)) continue
+        seenBoards.add(bKey)
+        boards.push(b)
+        if (boards.length >= 2) break
+      }
+      const feeds = await Promise.all(boards.map((b) => fetchBoardPins(b.user, b.board, 2500)))
+      boardDebug = { boards: boards.length, boardPins: feeds.flat().length }
+      for (const p of feeds.flat()) {
+        if (hits.length >= 10) break
+        const key = `pin:${p.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        hits.push({
+          platform,
+          url: `https://www.pinterest.com/pin/${p.id}`,
+          title: p.title,
+          snippet: null,
+          thumbnail: p.thumbnail,
+        })
+      }
+    }
+
+    // Blogs and pin pages rarely URL-match an image hit exactly, so thumbless
+    // cards there get one og:image fetch from the page itself — concurrent,
+    // 3s deadline each, and a slow or blocking page just keeps the emoji tile.
+    // (Instagram is excluded: its pages login-wall plain fetches.)
+    if (platform === 'web' || platform === 'pinterest') {
+      const deadline = (ms) =>
+        new Promise((resolve) => {
+          const t = setTimeout(() => resolve(null), ms)
+          t.unref?.()
+        })
+      await Promise.all(
+        hits
+          .filter((h) => !h.thumbnail)
+          .map(async (h) => {
+            h.thumbnail = (await Promise.race([fetchPageOgImage(h.url), deadline(3000)])) ?? null
+          }),
+      )
+    }
 
     // Enrich TikTok cards through oEmbed, concurrently, best-effort. A failed
     // enrichment keeps the plain text card — never drops the result.
@@ -142,14 +310,19 @@ export default async (req) => {
           const extra = await enrichTikTok(h.url)
           if (extra) {
             if (extra.caption) h.title = extra.caption.slice(0, 160)
-            h.author = extra.author
-            h.thumbnail = extra.thumbnail
+            if (extra.author) h.author = extra.author
+            if (extra.thumbnail) h.thumbnail = extra.thumbnail
           }
         }),
       )
     }
 
-    return json({ enabled: true, results: hits })
+    // Counts only, opt-in — for measuring index recall from the test harness.
+    const debug =
+      body?.debug === true
+        ? { debug: { organicTotal: organic.length, imgTotal: images.length, imgMatched: imgHits.length, ...(boardDebug ?? {}) } }
+        : {}
+    return json({ enabled: true, results: hits, ...debug })
   } catch (e) {
     return json({ enabled: true, message: e?.message || 'Search failed — try again.', results: [] }, 502)
   }
