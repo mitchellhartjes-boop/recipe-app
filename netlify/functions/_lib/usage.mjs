@@ -77,9 +77,15 @@ async function proFromRevenueCat(userId) {
     }).finally(() => clearTimeout(timer))
     if (!res.ok) return null
     const body = await res.json()
-    const ent = body?.subscriber?.entitlements?.pro
-    if (!ent?.expires_date) return null
-    const expires = new Date(ent.expires_date).getTime()
+    // Entitlements are keyed by their dashboard identifier ("Dilla Pro", not
+    // "pro"). There is only one entitlement, so accept any that is unexpired —
+    // immune to the identifier ever being renamed.
+    const ents = Object.values(body?.subscriber?.entitlements ?? {})
+    const expiries = ents
+      .map((e) => (e?.expires_date ? new Date(e.expires_date).getTime() : NaN))
+      .filter((t) => Number.isFinite(t))
+    if (!expiries.length) return null
+    const expires = Math.max(...expiries)
     return expires > Date.now() ? { expiresIso: new Date(expires).toISOString() } : null
   } catch {
     return null

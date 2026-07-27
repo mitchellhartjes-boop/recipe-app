@@ -79,12 +79,18 @@ export async function getProOffering(): Promise<ProOffering | null> {
   }
 }
 
-/** True when the RevenueCat "pro" entitlement is active for this user. */
+// Dilla has exactly one entitlement, so match ANY active one instead of a
+// hardcoded identifier — the dashboard entitlement is named "Dilla Pro", and a
+// string mismatch here would report a successful charge as a failure.
+const anyActiveEntitlement = (customerInfo: { entitlements: { active: Record<string, unknown> } }) =>
+  Object.keys(customerInfo.entitlements.active ?? {}).length > 0
+
+/** True when the RevenueCat pro entitlement is active for this user. */
 export async function hasProEntitlement(): Promise<boolean> {
   if (!purchasesAvailable()) return false
   try {
     const { customerInfo } = await Purchases.getCustomerInfo()
-    return Boolean(customerInfo.entitlements.active['pro'])
+    return anyActiveEntitlement(customerInfo)
   } catch {
     return false
   }
@@ -100,7 +106,7 @@ export async function purchasePro(pkg: PurchasesPackage): Promise<'purchased' | 
   if (!purchasesAvailable()) return 'failed'
   try {
     const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg })
-    return customerInfo.entitlements.active['pro'] ? 'purchased' : 'failed'
+    return anyActiveEntitlement(customerInfo) ? 'purchased' : 'failed'
   } catch (e) {
     const err = e as { code?: string | number; userCancelled?: boolean; message?: string }
     if (err?.userCancelled || String(err?.code) === 'PURCHASE_CANCELLED') return 'cancelled'
@@ -114,7 +120,7 @@ export async function restorePurchases(): Promise<boolean> {
   if (!purchasesAvailable()) return false
   try {
     const { customerInfo } = await Purchases.restorePurchases()
-    return Boolean(customerInfo.entitlements.active['pro'])
+    return anyActiveEntitlement(customerInfo)
   } catch {
     return false
   }
