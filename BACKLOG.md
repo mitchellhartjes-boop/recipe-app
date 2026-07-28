@@ -1,51 +1,49 @@
-# Recipe Vault — backlog
+# Dilla — backlog
 
-See `CLAUDE.md` for architecture/runbook. **Ingestion + infra are done; the active focus is design.**
+See `CLAUDE.md` for architecture/runbook and `docs/app-store-submission.md` for the store package.
+**Status: v1.0 SUBMITTED to App Review (2026-07-28)** — version + both subscription products in one
+review bundle; `DISCOVER_SEARCH_NATIVE` is OFF for the review window.
 
-## 🎨 Active focus: design / polish
+## ⏳ At approval (server-side, no app update)
 
-Start from **[`docs/DESIGN.md`](docs/DESIGN.md)** (palette, current screens, goals, how to run the
-frontend). High-value design work, roughly in priority order — confirm/refine with the owner:
+- Flip `DISCOVER_SEARCH_NATIVE=true` on Netlify — native Discover result cards go live everywhere.
+- Verify one real production purchase + Restore Purchases on the App Store build.
 
-1. **Recipe detail → a real cooking view** (highest daily value): tap-to-check ingredients, servings
-   scaler (structured `ingredients` have `quantity`/`unit`), bigger step UI / step-by-step "cook
-   mode", keep-screen-awake, star rating (schema has `rating 1–5`), "add to shopping list."
-2. **Library upgrades:** search, tag/category filter chips, a Favorites view, sorting/sections,
-   nicer cards, real empty/loading states.
-3. **Mobile-first / PWA shell:** bottom tab nav, safe-area insets, transitions, install/splash polish
-   (it lives on the iPhone home screen).
-4. **Add/Review flow:** friendlier "extracting…" state, success feedback, cleaner review form.
-5. **Identity & micro-delight:** consistent type/spacing scale, considered states, subtle motion,
-   maybe a day/evening (light/dark) mode.
+## 🎯 v1.1 — owner-requested (priority order)
 
-## Engineering nice-to-haves (not blocking)
+1. **Editable recipes + manual entry.** Fix extraction typos in place and type a family recipe in
+   from scratch. The biggest UX hole in v1.0 — users will ask within the first week.
+2. **Measurement scaling cleanup** (`src/lib/scale.ts`): doubling/tripling produces awkward amounts
+   (odd fractions/snaps). Round scaled quantities to cook-friendly numbers.
+   **Plus new feature: unit switching** (imperial ↔ metric, cups ↔ grams where convertible).
+3. **Grocery tab: allow up to 7 meals** in "This Week's Meals" (currently 5) — or make the slot
+   count user-adjustable.
 
-- **Website-extractor hardening** — now the primary path for link-in-bio + Pinterest. Handle sites
-  without JSON-LD, paywalls, consent walls, odd markup. Add real-world test URLs to `scripts/`.
-- **Cover speed:** caption covers are deferred ~1–2 min (Apify via the GitHub worker). Could move the
-  cover fetch to a Netlify **background function** (faster; skips the worker's npm-ci + ffmpeg-install).
-- Connect Netlify to the repo for auto-deploy on push (deploys are currently manual via netlify-cli).
-- **Rotate the secrets** that passed through chat during setup: Anthropic key, Groq key, app password,
-  GitHub PAT (also in Supabase Vault `github_dispatch_token`), Apify token.
-- Tune video vision to Haiku to cut cost if quality holds (the transcript carries most of the recipe).
-- Atomic job claiming (`UPDATE ... WHERE status='queued'`) if ever running overlapping workers.
-- Remove Vite scaffold leftovers (`src/App.css`, unused assets).
+## 📋 Owner action items (not code)
+
+- **Register a DMCA agent with the US Copyright Office** (~$6, online, ~10 min) — the safe-harbor
+  shield for user-imported content. Pair with a `/terms` page carrying the takedown policy
+  (Claude drafts it on request).
+- Rotate chat/binary-exposed secrets: `SHORTCUT_TOKEN`, the old `tbgimscpdrdwsernwfni` service key,
+  Apify proxy password — plus the older list (Anthropic/Groq keys, app password, PATs).
+- Transfer `finance-app` + the old Supabase project to a free org → the Pro org bills $25 flat.
+- Netlify paid tier as traffic grows; custom SMTP for Supabase auth emails.
+
+## 🔧 Post-launch engineering
+
+- Re-host the ~92 legacy recipe covers from the old project's public bucket into `dilla`'s storage
+  and update `image_url`s (old URLs keep serving meanwhile).
+- Drop the legacy dilla tables from the old (VITAL) project after a soak period.
+- Migrate VITAL to its own Supabase project (open anon-key policies shouldn't share a project with
+  anything else).
+- Link-in-bio recovery: sitemap fallback for non-WordPress blogs (~+10%); Pinterest video-pins via
+  the video pipeline; YouTube Shorts.
+- Recipe sharing TO friends (export / deep link) — the natural growth loop.
+- Website-extractor hardening (consent walls, odd markup); real-world test URLs in `scripts/`.
+- Atomic job claiming (`UPDATE … WHERE status='queued'`) if ever running overlapping workers.
 
 ## Known limit: audience-restricted reels
 
 ~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). **No third party can
-read these** — embed, yt-dlp, and Apify all fail (`restricted_page`) because the restriction is
-per-viewer. They show a clear "can't read, it's restricted" message. The only fix is the owner's *own*
-logged-in session (a manual `cookies.txt` export → local worker; fragile, PC-dependent, small
-account-flag risk). Revisit only if these pile up; otherwise add them by hand.
-
-## ✅ Shipped
-
-- **All ingestion paths:** IG caption (instant), recipe website (instant), video/audio reel (Apify →
-  cloud worker, always-on, no PC), link-in-bio + Pinterest (via the website path — share the blog URL).
-- **iOS share Shortcut** (`submit.mjs`, token-gated) — build guide in `docs/ios-shortcut.md`.
-- **Permanent cover images** re-hosted to Supabase Storage; reel covers use Apify's clean,
-  play-button-free `displayUrl`; missing covers self-heal via background `cover` jobs.
-- **On-demand worker** — a `recipe_jobs` insert trigger dispatches the GitHub workflow via `pg_net`
-  (runs in ~1–2 min, not the flaky `*/5` cron).
-- **Retired** the ~30¢ Claude `web_search` link-in-bio recovery in favor of the cheap website path.
+read these** — embed, yt-dlp, and Apify all fail because the restriction is per-viewer. The app shows
+an honest message and suggests the screenshot path, which works for anything visible on screen.
