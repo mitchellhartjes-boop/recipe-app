@@ -262,12 +262,14 @@ async function main() {
     console.warn('Set SUPABASE_SERVICE_ROLE_KEY to process every user\'s jobs.')
   }
 
+  let consecutivePollErrors = 0
   for (;;) {
     try {
       let query = supabase.from('recipe_jobs').select('*').eq('status', 'queued')
       if (KINDS.length) query = query.in('kind', KINDS)
       const { data: jobs, error } = await query.order('created_at', { ascending: true }).limit(1)
       if (error) throw error
+      consecutivePollErrors = 0
       const job = jobs?.[0]
       if (!job) {
         if (RUN_ONCE) {
@@ -292,6 +294,15 @@ async function main() {
       }
     } catch (e) {
       console.error('poll error:', e.message)
+      // In run-once mode an erroring queue query must FAIL the run, not retry
+      // until the workflow timeout: the silent spin blocks the concurrency
+      // slot, queues every later dispatch behind it, and hides the real error
+      // (bad URL/key) as a "hang". Three strikes and out, loudly.
+      consecutivePollErrors += 1
+      if (RUN_ONCE && consecutivePollErrors >= 3) {
+        console.error('Three consecutive poll errors in run-once mode — failing the run. Check SUPABASE URL/key secrets.')
+        process.exit(1)
+      }
       await sleep(POLL_MS)
     }
   }

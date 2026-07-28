@@ -7,8 +7,44 @@ import { supabase } from './supabase'
 type SharedStore = {
   set(options: { key: string; value: string }): Promise<void>
   remove(options: { key: string }): Promise<void>
+  get(options: { key: string }): Promise<{ value: string | null }>
 }
 const SharedStore = registerPlugin<SharedStore>('SharedStore')
+
+// Diagnostic trail for the Settings panel: every App Group interaction and its
+// outcome, newest last. On-device is the only place the share handoff can be
+// debugged — the WebView console is unreachable from a Windows dev machine.
+const diag: string[] = []
+const note = (s: string) => {
+  diag.push(`${new Date().toISOString().slice(11, 19)} ${s}`)
+  if (diag.length > 14) diag.shift()
+}
+export const shareKeyDiag = () => diag.join('\n') || '(no share-key activity yet)'
+
+/** Live probe: write a value through the plugin, read it back, and report what
+ *  the App Group actually holds. Run from the Settings diagnostics panel. */
+export async function probeSharedStore(): Promise<string> {
+  const lines: string[] = []
+  try {
+    await SharedStore.set({ key: 'dilla-probe', value: `ok-${Date.now()}` })
+    lines.push('plugin set: OK')
+  } catch (e) {
+    lines.push(`plugin set: FAILED — ${e instanceof Error ? e.message : String(e)}`)
+  }
+  try {
+    const { value } = await SharedStore.get({ key: 'dilla-probe' })
+    lines.push(value ? 'roundtrip read: OK' : 'roundtrip read: EMPTY (write not landing)')
+  } catch (e) {
+    lines.push(`roundtrip read: FAILED — ${e instanceof Error ? e.message : String(e)}`)
+  }
+  try {
+    const { value } = await SharedStore.get({ key: SHARE_KEY_DEFAULTS_KEY })
+    lines.push(value ? `share key in App Group: ${value.slice(0, 6)}…` : 'share key in App Group: MISSING')
+  } catch (e) {
+    lines.push(`share key read: FAILED — ${e instanceof Error ? e.message : String(e)}`)
+  }
+  return lines.join('\n')
+}
 
 // The key the extension reads. Must match ShareViewController.swift.
 export const SHARE_KEY_DEFAULTS_KEY = 'dilla-share-key'
@@ -54,6 +90,7 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
   // that could fail: a share made mid-switch must fail loudly, never land in
   // the previous account's library.
   if (cached && cached.userId !== userId) {
+    note('account switch — scrubbing previous key')
     try {
       localStorage.removeItem(LOCAL_CACHE)
     } catch {
@@ -96,6 +133,7 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
     device_label: navigator.userAgent.slice(0, 120),
   })
   if (error) {
+    note(`mint FAILED server-side: ${error.message}`)
     console.warn('[shareKey] could not register key', error.message)
     // Better no key (extension says "open Dilla first") than a stale one.
     try {
@@ -117,7 +155,9 @@ export async function ensureShareKey(userId: string): Promise<string | null> {
 async function writeToAppGroup(key: string) {
   try {
     await SharedStore.set({ key: SHARE_KEY_DEFAULTS_KEY, value: key })
+    note(`wrote key ${key.slice(0, 6)}… to App Group`)
   } catch (e) {
+    note(`App Group write FAILED: ${e instanceof Error ? e.message : String(e)}`)
     console.warn('[shareKey] App Group write failed', e)
   }
 }

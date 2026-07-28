@@ -19,7 +19,8 @@ public class SharedStorePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "SharedStore"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise)
     ]
 
     private let suiteName = "group.com.mitchellhartjes.dilla"
@@ -57,5 +58,16 @@ public class SharedStorePlugin: CAPPlugin, CAPBridgedPlugin {
         guard let d = defaults(call) else { return }
         d.removeObject(forKey: key)
         call.resolve()
+    }
+
+    // Read-back, used by the Settings diagnostics panel to verify the whole
+    // app -> App Group -> extension channel from ON the device.
+    @objc func get(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else {
+            call.reject("key is required")
+            return
+        }
+        guard let d = defaults(call) else { return }
+        call.resolve(["value": d.string(forKey: key) as Any])
     }
 }

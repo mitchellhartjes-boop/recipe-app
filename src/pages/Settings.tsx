@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import { apiUrl } from '../lib/api'
 import { SunIcon, MoonIcon, LogOutIcon, TrashIcon, CheckIcon } from '../components/icons'
 import Portal from '../components/Portal'
-import { clearShareKey } from '../lib/shareKey'
+import { clearShareKey, shareKeyDiag, probeSharedStore } from '../lib/shareKey'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,6 +34,20 @@ export default function Settings() {
   const { session, signOut } = useAuth()
   const { dark, toggle } = useTheme()
   const [confirming, setConfirming] = useState(false)
+  const [diagTaps, setDiagTaps] = useState(0)
+  const [probe, setProbe] = useState<string | null>(null)
+
+  // Run the App Group probe once when the diagnostics panel is revealed.
+  useEffect(() => {
+    if (diagTaps < 3 || probe !== null) return
+    let cancelled = false
+    void probeSharedStore().then((r) => {
+      if (!cancelled) setProbe(r)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [diagTaps, probe])
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usage, setUsage] = useState<{ plan: string; used: number; limit: number } | null>(null)
@@ -204,7 +218,16 @@ export default function Settings() {
         </button>
       </Section>
 
-      <p className="px-1 text-center text-xs text-stone-400">Dilla · Recipe Vault</p>
+      {/* Triple-tap reveals the share-handoff diagnostics — the only window
+          into the App Group channel from on the device. */}
+      <p className="px-1 text-center text-xs text-stone-400" onClick={() => setDiagTaps((n) => n + 1)}>
+        Dilla · Recipe Vault
+      </p>
+      {diagTaps >= 3 && (
+        <pre className="whitespace-pre-wrap break-all rounded-2xl bg-paper p-4 text-left font-mono text-[10px] leading-relaxed text-stone-500 shadow-card">
+          {`user: ${session?.user?.id?.slice(0, 8) ?? 'signed out'}…\n— probe —\n${probe ?? 'running…'}\n— key activity this session —\n${shareKeyDiag()}`}
+        </pre>
+      )}
 
       {confirming && (
         <Portal>
