@@ -102,8 +102,22 @@ export function usePushRegistration(userId: string | undefined) {
       }
     })()
 
+    // Re-sync the share key EVERY time the app returns to the foreground. The
+    // one-shot sign-in sync above has a hole: sign in, immediately switch to
+    // Instagram to share, and iOS suspends the JS mid-sequence — the key row
+    // reaches the server but the App Group write never runs, so every share
+    // fails with "open Dilla first" until a fresh sign-in. Foregrounding the
+    // app is the natural recovery gesture, so make it actually recover.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        void ensureShareKey(userId).catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
       // Drop the listeners so a re-run (or a user switch) doesn't stack them and
       // resolve a later registration against a stale user id.
       void PushNotifications.removeAllListeners()
