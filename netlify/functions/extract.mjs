@@ -158,7 +158,9 @@ export default async (req) => {
           }
         }
         const recovered = await recoverFromCreatorSite({
-          supabase: await appClient(),
+          // Service role: recipe_creators is server-maintained and its client
+          // write policies are revoked (cache-poisoning guard).
+          supabase: usageAdmin() ?? (await appClient()),
           handle: res.handle,
           dish: r.title,
           captionUrl: target,
