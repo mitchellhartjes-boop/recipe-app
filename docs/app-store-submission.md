@@ -116,19 +116,23 @@ ACCOUNT DELETION: Settings → Delete account (required by 5.1.1(v)) — removes
 
 ## 7. Screenshots
 
-Required: one set at **6.9-inch** (1320 × 2868 portrait). Apple auto-scales it
-for smaller sizes. Take raw screenshots on the iPhone in this order, then hand
-them over — they'll be framed/captioned into final PNGs:
+Final set (built, both 6.9" 1320×2868 and 6.5" 1284×2778), in upload order —
+the first three are what store search shows, so they carry the differentiators:
 
-1. **Library** (All recipes, a healthy grid with covers)
-2. **Recipe page** (a good-looking recipe: cover, rating, ingredients visible)
-3. **Cook Mode** (a step with a running timer chip + "You'll need" chips visible)
-4. **Add screen** or a just-imported success moment
-5. **Grocery list** (a plausible week's list)
-6. **Settings → How to use Dilla** (shows the share flow) — or a Discover browser view
+1. **Share story** (marketing frame): "Share a reel. Get the recipe." — the
+   reel → Dilla → notification → written-out recipe flow. The one thing
+   competitor listings can't claim.
+2. **Recipe page** — "Clean, complete, ready to cook"
+3. **Cook Mode** — "Step-by-step, timers built in"
+4. **Library** — "Your recipes, finally organized"
+5. **Discover** — "Find it. Save it. Cook it."
+6. **All recipes/search** — "Search your whole collection"
+7. **Grocery + This Week's Meals** — "Recipe to grocery list in a tap"
 
-Tips: seed the demo account first so the library looks alive; screenshot in
-light mode for the store set; avoid personal info in the status bar area.
+Creator names/handles are scrubbed throughout. Positioning note: competitors
+must never be NAMED in metadata (Guideline 2.3.10) — differentiation is said
+through capabilities (video-spoken extraction, link-in-bio recovery,
+share-and-stay + push), which the promo text and description lead with.
 
 The subscription products already have their review screenshot uploaded
 (padded 1290×2796) — nothing more needed there.
