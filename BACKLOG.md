@@ -42,6 +42,17 @@ review bundle; `DISCOVER_SEARCH_NATIVE` is OFF for the review window.
 - Website-extractor hardening (consent walls, odd markup); real-world test URLs in `scripts/`.
 - Atomic job claiming (`UPDATE … WHERE status='queued'`) if ever running overlapping workers.
 
+### Cost guards (unit costs: text ~1¢, screenshot ~2-3¢, video ~8-12¢; free user hard-capped ≈$0.90/mo)
+
+- **Owner, no code: set hard monthly spend limits in the Anthropic + Groq consoles** — makes a
+  surprise bill impossible regardless of growth.
+- **Video vision → Haiku experiment**: the priciest path drops ~70% (to ~3¢/video) if quality holds
+  on real reels. Biggest single lever on the cost model.
+- **Meter Discover searches** (only per-user cost with no cap): fold into monthly limits or a
+  per-day throttle (~100/day). Signed-in-only already; this closes the scripted-abuse edge.
+- Tier limits + pricing live server-side (`plan_limits()` SQL + `_lib/usage.mjs` PLANS) — tuning the
+  free/pro caps is a deploy, never an app update.
+
 ## Known limit: audience-restricted reels
 
 ~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). **No third party can
