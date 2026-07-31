@@ -57,7 +57,14 @@ FREE TO START
 Save up to 20 recipes a month free, including video extractions. Dilla Pro raises that to 200 a month for $4.99/month or $29.99/year.
 
 Your recipes are yours: no ads, no tracking, delete your account (and everything with it) anytime from Settings.
+
+Privacy Policy: https://recipe-vault-mh.netlify.app/privacy
+Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
 ```
+
+Note: the Terms of Use line in the description is REQUIRED by App Review for
+auto-renewable subscriptions when using Apple's standard EULA (first
+submission bounced on exactly this — automated check, metadata-only fix).
 
 ## 4. Keywords (100 chars max, comma-separated)
 
