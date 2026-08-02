@@ -19,6 +19,17 @@ review bundle; `DISCOVER_SEARCH_NATIVE` is OFF for the review window.
 3. **Grocery tab: allow up to 7 meals** in "This Week's Meals" (currently 5) — or make the slot
    count user-adjustable.
 
+### Tier strategy (decided pre-launch; revisit with data)
+
+- Launch tiers stand: free 20/mo incl 5 video; Pro 200/40. The free caps intercept the day-one
+  backlog binge (everyone arrives with saved reels), which is the peak-excitement conversion moment;
+  the 5-video sub-cap is the sharper trigger than the 20.
+- **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians) and tune
+  limits server-side (`plan_limits()` + PLANS) — no app update needed.
+- **Pro-lane additions for v1.1:** priority worker queue for Pro (order by plan, one-line change;
+  "your reels import first"), unit switching as a Pro perk. Editing stays FREE — gating a user's
+  own data reads as hostile.
+
 ## 📋 Owner action items (not code)
 
 - **Register a DMCA agent with the US Copyright Office** (~$6, online, ~10 min) — the safe-harbor
