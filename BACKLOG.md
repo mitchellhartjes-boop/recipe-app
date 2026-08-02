@@ -1,71 +1,85 @@
-# Dilla — backlog
+# Dilla — roadmap & backlog
 
 See `CLAUDE.md` for architecture/runbook and `docs/app-store-submission.md` for the store package.
 **Status: v1.0 SUBMITTED to App Review (2026-07-28)** — version + both subscription products in one
 review bundle; `DISCOVER_SEARCH_NATIVE` is OFF for the review window.
 
-## ⏳ At approval (server-side, no app update)
+## ⏳ At approval (same day, server-side)
 
 - Flip `DISCOVER_SEARCH_NATIVE=true` on Netlify — native Discover result cards go live everywhere.
 - Verify one real production purchase + Restore Purchases on the App Store build.
 
-## 🎯 v1.1 — owner-requested (priority order)
+---
 
-1. **Editable recipes + manual entry.** Fix extraction typos in place and type a family recipe in
-   from scratch. The biggest UX hole in v1.0 — users will ask within the first week.
-2. **Measurement scaling cleanup** (`src/lib/scale.ts`): doubling/tripling produces awkward amounts
-   (odd fractions/snaps). Round scaled quantities to cook-friendly numbers.
-   **Plus new feature: unit switching** (imperial ↔ metric, cups ↔ grams where convertible).
-3. **Grocery tab: allow up to 7 meals** in "This Week's Meals" (currently 5) — or make the slot
-   count user-adjustable.
+## 🚀 v2 — the fast follow (target: submit within ~2 weeks of approval)
 
-### Tier strategy (decided pre-launch; revisit with data)
+Theme: fix what week-one users will hit, and give Pro a story beyond bigger numbers.
+Everything here is app-binary work (one Codemagic build + review cycle).
 
-- Launch tiers stand: free 20/mo incl 5 video; Pro 200/40. The free caps intercept the day-one
-  backlog binge (everyone arrives with saved reels), which is the peak-excitement conversion moment;
-  the 5-video sub-cap is the sharper trigger than the 20.
-- **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians) and tune
-  limits server-side (`plan_limits()` + PLANS) — no app update needed.
-- **Pro-lane additions for v1.1:** priority worker queue for Pro (order by plan, one-line change;
-  "your reels import first"), unit switching as a Pro perk. Editing stays FREE — gating a user's
-  own data reads as hostile.
+1. **Editable recipes + manual entry** (FREE for everyone — gating a user's own data reads as
+   hostile). Edit any saved recipe in place (fix extraction typos, tweak amounts, add notes) and
+   create a recipe from scratch. Reuse the ReviewRecipe form as the editing surface.
+   The headliner: the #1 thing v1.0 users will ask for.
+2. **Measurement scaling cleanup** (`src/lib/scale.ts`, FREE): doubling/tripling currently produces
+   awkward fractions/snaps — round scaled quantities to cook-friendly numbers.
+3. **Unit switching** (PRO perk): imperial ↔ metric, cups ↔ grams where convertible, on the recipe
+   page and in Cook Mode.
+4. **Priority processing** (PRO perk, server + paywall copy): Pro users' video imports jump the
+   worker queue (order by plan, then created_at). "Your reels import first."
+5. **Grocery: up to 7 meal slots** in "This Week's Meals" (currently 5), or user-adjustable (FREE).
+6. **Paywall refresh**: perks list gains the two new Pro bullets; retake the subscription review
+   screenshot with live prices.
 
-## 📋 Owner action items (not code)
+App Store version number: ship as 1.1 internally is fine, but marketing-wise call it what it is —
+decide at submission (Apple doesn't care).
 
-- **Register a DMCA agent with the US Copyright Office** (~$6, online, ~10 min) — the safe-harbor
-  shield for user-imported content. Pair with a `/terms` page carrying the takedown policy
-  (Claude drafts it on request).
-- Rotate chat/binary-exposed secrets: `SHORTCUT_TOKEN`, the old `tbgimscpdrdwsernwfni` service key,
-  Apify proxy password — plus the older list (Anthropic/Groq keys, app password, PATs).
-- Transfer `finance-app` + the old Supabase project to a free org → the Pro org bills $25 flat.
-- Netlify paid tier as traffic grows; custom SMTP for Supabase auth emails.
+## 🔮 v3 — bigger bets (shape AFTER v2 + usage data)
 
-## 🔧 Post-launch engineering
+Owner-confirmed candidates, roughly ordered; final scope decided once real usage lands:
 
-- Re-host the ~92 legacy recipe covers from the old project's public bucket into `dilla`'s storage
-  and update `image_url`s (old URLs keep serving meanwhile).
-- Drop the legacy dilla tables from the old (VITAL) project after a soak period.
-- Migrate VITAL to its own Supabase project (open anon-key policies shouldn't share a project with
-  anything else).
-- Link-in-bio recovery: sitemap fallback for non-WordPress blogs (~+10%); Pinterest video-pins via
-  the video pipeline; YouTube Shorts.
-- Recipe sharing TO friends (export / deep link) — the natural growth loop.
+- **Recipe sharing TO friends** (export / deep link / "sent you a recipe" flow) — the natural
+  growth loop and the strongest candidate for v3's headliner.
+- **Import coverage expansion**: YouTube Shorts; Pinterest video-pins through the video pipeline;
+  link-in-bio sitemap fallback for non-WordPress blogs (~+10% recovery). (Server-heavy — pieces can
+  land continuously; grouped here as the marketable "import everything" story.)
+- **Meal planner v2**: link actual recipes (not just text) to the week, portions → grocery list.
+- **Nutrition estimates** (competitor parity with ReciMe; AI-estimated, clearly labeled).
+- **Collections / custom folders** beyond the automatic categories.
+- Family Sharing for Pro / iPad layout — candidates, unscoped.
+
+## 🔄 Continuous — server-side, ships anytime (no app release, no review)
+
+- **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians;
+  the key metric = conversion rate of cap-hitters within a week) and tune tiers via
+  `plan_limits()` + PLANS — a deploy, never an app update.
+- **Video vision → Haiku experiment**: priciest path drops ~70% (to ~3¢/video) if quality holds.
+- **Meter Discover searches** (~100/day or fold into monthly caps) — the one uncapped per-user cost.
+- Re-host the ~92 legacy covers from the old project's bucket; update `image_url`s.
+- Drop legacy dilla tables from the old (VITAL) project after a soak period; migrate VITAL to its
+  own project eventually.
 - Website-extractor hardening (consent walls, odd markup); real-world test URLs in `scripts/`.
 - Atomic job claiming (`UPDATE … WHERE status='queued'`) if ever running overlapping workers.
 
-### Cost guards (unit costs: text ~1¢, screenshot ~2-3¢, video ~8-12¢; free user hard-capped ≈$0.90/mo)
+## 📋 Owner action items (not code)
 
-- **Owner, no code: set hard monthly spend limits in the Anthropic + Groq consoles** — makes a
-  surprise bill impossible regardless of growth.
-- **Video vision → Haiku experiment**: the priciest path drops ~70% (to ~3¢/video) if quality holds
-  on real reels. Biggest single lever on the cost model.
-- **Meter Discover searches** (only per-user cost with no cap): fold into monthly limits or a
-  per-day throttle (~100/day). Signed-in-only already; this closes the scripted-abuse edge.
-- Tier limits + pricing live server-side (`plan_limits()` SQL + `_lib/usage.mjs` PLANS) — tuning the
-  free/pro caps is a deploy, never an app update.
+- **Tonight-cheap: hard monthly spend limits in the Anthropic + Groq consoles** — makes a surprise
+  bill impossible. (Unit costs: text ~1¢, screenshot ~2-3¢, video ~8-12¢; free user hard-capped
+  ≈$0.90/mo by the metering.)
+- **Register a DMCA agent with the US Copyright Office** (~$6, ~10 min) + `/terms` page with the
+  takedown policy (Claude drafts on request).
+- Rotate chat/binary-exposed secrets: `SHORTCUT_TOKEN`, old `tbgimscpdrdwsernwfni` service key,
+  Apify proxy password, plus the older list (Anthropic/Groq keys, app password, PATs).
+- Transfer `finance-app` + the old Supabase project to a free org → Pro org bills $25 flat.
+- Netlify paid tier as traffic grows; custom SMTP for Supabase auth emails.
+
+## Tier strategy (decided pre-launch; revisit with data)
+
+Free 20/mo incl 5 video; Pro $4.99/mo or $29.99/yr = 200/40. The free caps intercept the day-one
+backlog binge (everyone arrives with saved reels) at peak excitement; the 5-video sub-cap is the
+sharper conversion trigger. Editing stays free forever.
 
 ## Known limit: audience-restricted reels
 
-~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). **No third party can
-read these** — embed, yt-dlp, and Apify all fail because the restriction is per-viewer. The app shows
-an honest message and suggests the screenshot path, which works for anything visible on screen.
+~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). No third party can
+read these — the restriction is per-viewer. The app shows an honest message and suggests the
+screenshot path, which works for anything visible on screen.
