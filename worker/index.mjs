@@ -75,7 +75,7 @@ async function notifyJob(supabase, job, outcome) {
   if (!tokens?.length) return
 
   const content = outcome.ok
-    ? { title: 'Saved to Dilla', body: `“${outcome.title}” is in your library.`, data: { recipe_id: outcome.recipeId } }
+    ? { title: 'Recipe saved', body: `“${outcome.title}” is in your library.`, data: { recipe_id: outcome.recipeId } }
     : { title: 'Dilla couldn’t save that', body: outcome.message || 'That reel couldn’t be imported — try a screenshot.' }
 
   for (const { token } of tokens) {

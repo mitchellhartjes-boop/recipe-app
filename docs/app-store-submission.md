@@ -114,7 +114,9 @@ HOW TO TEST IMPORT (no social media account needed):
 
 The Share Extension uploads the shared link/image in the background; extraction runs server-side and the app notifies when the recipe is ready.
 
-DISCOVER TAB: opens the selected platform's own public website in an in-app browser. Saving is always user-initiated (the "Save this recipe" bar). Dilla does not display feeds of platform content.
+DISCOVER TAB: opens the selected platform's own public website in an in-app browser. Recipe extraction is always user-initiated (the "Get the recipe" bar). Dilla does not display feeds of platform content.
+
+5.2.3 NOTE — NO MEDIA DOWNLOADING: Dilla has no capability to save, download, play back, export, or provide video/audio/media files to users, on device or via our servers. Shared links are analyzed transiently server-side solely to produce a plain-text recipe (title, ingredients, steps), similar to transcription; nothing is retained except the text. Every recipe shows creator attribution and a "View original" link back to the source platform.
 
 SUBSCRIPTIONS: Dilla Pro (monthly/annual, in this submission) raises the monthly import limit from 20 to 200. Purchases are processed by StoreKit via RevenueCat; the demo account is on the free tier, which is fully functional for review.
 

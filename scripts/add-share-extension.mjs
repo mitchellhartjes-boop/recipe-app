@@ -179,7 +179,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, URLSessionDataDelegate, U
                 return ("Working on it…", message ?? "Reading the recipe — it'll appear shortly.")
             }
             if ok {
-                return ("Saved to Dilla", message ?? "Recipe saved to your library.")
+                return ("Recipe saved", message ?? "Recipe saved to your library.")
             }
             return ("Dilla couldn't save that", message ?? "That share couldn't be imported.")
         }

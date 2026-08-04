@@ -132,7 +132,7 @@ function ShareFlowArt() {
       {/* the notification that closes the loop */}
       <div className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full bg-paper py-1.5 pl-2 pr-3.5 shadow-card">
         <img src="/favicon.svg" alt="" className="h-5 w-5 rounded-md" />
-        <span className="text-[11px] font-medium text-ink">Saved to Dilla</span>
+        <span className="text-[11px] font-medium text-ink">Recipe saved</span>
         <CheckIcon className="h-3.5 w-3.5 text-paprika-700" />
       </div>
     </div>

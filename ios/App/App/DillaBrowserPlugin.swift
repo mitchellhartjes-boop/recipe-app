@@ -117,7 +117,9 @@ final class DillaBrowserViewController: UIViewController, WKNavigationDelegate {
         bar.addSubview(back)
 
         let save = UIButton(type: .system)
-        save.setTitle("Save this recipe", for: .normal)
+        // "Get" not "Save": the app extracts the recipe TEXT from the page —
+        // it never saves the page's media. Language matters for 5.2.3.
+        save.setTitle("Get the recipe", for: .normal)
         save.setTitleColor(.white, for: .normal)
         save.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         // Dilla paprika — matches the app's primary button.

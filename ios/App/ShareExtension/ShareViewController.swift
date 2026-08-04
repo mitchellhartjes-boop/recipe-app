@@ -80,7 +80,7 @@ enum ShareOutcome {
                 return ("Working on it…", message ?? "Reading the recipe — it'll appear shortly.")
             }
             if ok {
-                return ("Saved to Dilla", message ?? "Recipe saved to your library.")
+                return ("Recipe saved", message ?? "Recipe saved to your library.")
             }
             return ("Dilla couldn't save that", message ?? "That share couldn't be imported.")
         }
@@ -157,7 +157,7 @@ class ShareViewController: UIViewController {
         spinner.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(spinner)
 
-        label.text = "Saving to Dilla…"
+        label.text = "Getting the recipe…"
         label.font = .systemFont(ofSize: 15, weight: .medium)
         label.textColor = .label
         label.numberOfLines = 3
@@ -331,7 +331,7 @@ class ShareViewController: UIViewController {
         DispatchQueue.main.async {
             self.spinner.stopAnimating()
             self.spinner.isHidden = true
-            self.label.text = "Saving to Dilla — it'll be in your library shortly."
+            self.label.text = "Getting the recipe — it'll be in your library shortly."
             completeAfterPendingNotifications(self.extensionContext, delay: 1.2)
         }
     }
