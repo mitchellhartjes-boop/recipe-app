@@ -4,7 +4,11 @@ name: recipe-worker
 # Public repo => unlimited free Actions minutes. ffmpeg is apt-installed below (NOT preinstalled).
 on:
   schedule:
-    - cron: '*/5 * * * *' # every 5 minutes (GitHub's minimum)
+    # SAFETY NET ONLY — real imports dispatch instantly via the recipe_jobs
+    # insert trigger (pg_net -> workflow_dispatch). Ran every 5 min originally;
+    # relaxed to 15 because each tick competes for a free-tier runner, and a
+    # tick that never gets one occupies the concurrency slot until it times out.
+    - cron: '*/15 * * * *'
   workflow_dispatch: {} # manual / on-demand run
 
 concurrency:
@@ -14,7 +18,10 @@ concurrency:
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Bounds how long a wedged or runner-starved run can hold the concurrency
+    # slot (a real user import dispatched behind it waits this long). Still
+    # comfortably above a full video job: Apify + download + transcribe + vision.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

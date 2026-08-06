@@ -262,6 +262,26 @@ async function main() {
     console.warn('Set SUPABASE_SERVICE_ROLE_KEY to process every user\'s jobs.')
   }
 
+  // Rescue orphans before polling. A runner killed mid-job (workflow timeout,
+  // infra eviction) leaves its row stuck at 'processing' — and the poll only
+  // ever selects 'queued', so nothing would retry it and the user who shared it
+  // waits forever with no notification. Anything still 'processing' well past
+  // the workflow's own timeout cannot be alive: put it back in the queue.
+  // Safe under the `recipe-worker` concurrency group (never two drains at once).
+  try {
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    const { data: revived, error: reviveErr } = await supabase
+      .from('recipe_jobs')
+      .update({ status: 'queued' })
+      .eq('status', 'processing')
+      .lt('updated_at', staleBefore)
+      .select('id')
+    if (reviveErr) console.warn('stale-job requeue failed:', reviveErr.message)
+    else if (revived?.length) console.warn(`Requeued ${revived.length} stale processing job(s).`)
+  } catch (e) {
+    console.warn('stale-job requeue error:', e.message)
+  }
+
   let consecutivePollErrors = 0
   for (;;) {
     try {
