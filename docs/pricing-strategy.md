@@ -77,9 +77,17 @@ All three are available and none requires an app update.
 
 ## 6. Decisions & recommendations
 
-1. **Free tier stays 20/mo incl 5 video at launch.** 20 is generous vs competitors
-   (ReciMe ≈ small lifetime cap; Paprika has no free tier) and intercepts the day-one
-   backlog binge at peak excitement. 5 videos protects the "aha" (2–3 videos) with room.
+1. **REVISED 2026-08-14 (owner call): free tier tightens to 10/mo incl 3 video in v2.**
+   The monthly reset is a conversion leak: most users' steady-state demand is under
+   20/mo, so a renewing 20 is permanently sufficient — patient users never pay. The
+   store listing under review promises 20/mo, so sequencing is: LAUNCH at 20 as
+   submitted → flip server limits (`plan_limits()` + PLANS) and the description
+   together in the v2 release. New free-user cost ceiling at 10/3: ~$0.45.
+   **v2-scope decision — the structural fix: a lifetime LIBRARY CAP** (free = ~25
+   recipes total; monthly metering stays as the cost guard; Pro = the big library).
+   Matches how ReciMe/Crouton gate; pressure grows with the collection instead of
+   resetting. Confirm with week-1/2 data: users returning at the monthly reset
+   without converting = the smoking gun.
 2. **Add a 7-day free trial on Monthly** (App Store Connect intro offer; RevenueCat
    picks it up automatically). Trials are the single biggest conversion lever for
    subscription apps; cost exposure per trial is capped at Pro limits (≈$6 absolute

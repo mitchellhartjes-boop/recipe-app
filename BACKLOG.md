@@ -72,11 +72,18 @@ Owner-confirmed candidates, roughly ordered; final scope decided once real usage
 - Transfer `finance-app` + the old Supabase project to a free org → Pro org bills $25 flat.
 - Netlify paid tier as traffic grows; custom SMTP for Supabase auth emails.
 
-## Tier strategy (decided pre-launch; revisit with data)
+## Tier strategy (REVISED 2026-08-14 — full model in docs/pricing-strategy.md)
 
-Free 20/mo incl 5 video; Pro $4.99/mo or $29.99/yr = 200/40. The free caps intercept the day-one
-backlog binge (everyone arrives with saved reels) at peak excitement; the 5-video sub-cap is the
-sharper conversion trigger. Editing stays free forever.
+- **Launch at 20/5** (matches the store listing under review), then **tighten to 10/mo
+  incl 3 video in v2** — server flip (`plan_limits()` + PLANS) and description edit
+  together. Rationale (owner call): the monthly reset leaks — most users' steady-state
+  demand is under 20/mo, so a renewing 20 never forces a decision.
+- **v2 design decision: lifetime library cap** (free ≈ 25 recipes total; monthly video
+  metering stays as the cost guard; Pro = the big library). Category-proven structure —
+  conversion pressure grows with the collection instead of resetting monthly. Confirm
+  with week-1/2 data: users returning at the monthly reset without converting = smoking gun.
+- **7-day free trial on Monthly** (ASC intro offer, config at/after approval; paywall
+  copy line in v2). Pro stays $4.99/$29.99 = 200/40. Editing stays free forever.
 
 ## Known limit: audience-restricted reels
 
