@@ -27,8 +27,12 @@ Everything here is app-binary work (one Codemagic build + review cycle).
 4. **Priority processing** (PRO perk, server + paywall copy): Pro users' video imports jump the
    worker queue (order by plan, then created_at). "Your reels import first."
 5. **Grocery: up to 7 meal slots** in "This Week's Meals" (currently 5), or user-adjustable (FREE).
-6. **Paywall refresh**: perks list gains the two new Pro bullets; retake the subscription review
-   screenshot with live prices.
+6. **Paywall refresh**: perks list gains the two new Pro bullets + "7 days free" trial line;
+   retake the subscription review screenshot with live prices.
+7. **In-app review prompt** (spec: docs/marketing-specs/review-prompt.md) — native
+   SKStoreReviewController at the 2nd Cook Mode completion (fallback: 10th import), with the
+   spec's guards. Local flags only; no sentiment-gating.
+8. **Free-tier flip to 10/mo incl 3 video** + matching description edit (see Tier strategy below).
 
 App Store version number: ship as 1.1 internally is fine, but marketing-wise call it what it is —
 decide at submission (Apple doesn't care).

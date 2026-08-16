@@ -16,6 +16,8 @@ import Settings from './pages/Settings'
 import ResetPassword from './pages/ResetPassword'
 import Upgrade from './pages/Upgrade'
 import Discover from './pages/Discover'
+import Landing from './pages/Landing'
+import { Capacitor } from '@capacitor/core'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -42,14 +44,20 @@ function RecoveryRedirect() {
 }
 
 export default function App() {
-  const { session } = useAuth()
+  const { session, loading } = useAuth()
   // Register for push once there's a signed-in user, and re-register if the
   // account changes — the token is filed against whoever is signed in.
   usePushRegistration(session?.user?.id)
+  // Logged-out WEB visitors at the root get the marketing page (first matching
+  // route wins). Native app users and signed-in users fall through to the app;
+  // while the session is still loading, the Protected route's spinner shows —
+  // so returning users never flash the marketing page.
+  const showLanding = !Capacitor.isNativePlatform() && !loading && !session
   return (
     <BrowserRouter>
       <RecoveryRedirect />
       <Routes>
+        {showLanding && <Route path="/" element={<Landing />} />}
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route element={<Protected><Layout /></Protected>}>
           <Route path="/" element={<Library />} />

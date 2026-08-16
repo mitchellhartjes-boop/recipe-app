@@ -40,3 +40,8 @@ tools/
 # iOS signing keys — NEVER commit these
 *.pem
 ios_distribution_key*
+
+# store-screenshot generator working dirs (source zip lives in Downloads)
+scripts/pics/
+scripts/store-6.5/
+scripts/store-6.9/

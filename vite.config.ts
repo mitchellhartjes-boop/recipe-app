@@ -45,6 +45,10 @@ export default defineConfig({
               navigateFallback: '/index.html',
               navigateFallbackDenylist: [/^\/\.netlify\//],
               globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+              // Press-kit assets are multi-MB downloads for journalists — never
+              // precache them into every visitor's service worker (they also
+              // exceed workbox's 2MB per-file limit and fail the build).
+              globIgnores: ['**/press/**'],
               // Cache the re-hosted recipe cover images (Supabase Storage) so the
               // library still shows pictures on a flaky kitchen connection.
               runtimeCaching: [

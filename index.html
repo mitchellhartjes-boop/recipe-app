@@ -37,10 +37,27 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <title>Dilla: Recipe Vault</title>
+    <title>Dilla — Save recipes from TikTok, Instagram &amp; Pinterest, written out properly</title>
+    <meta
+      name="description"
+      content="Share a reel, get the recipe. Dilla writes down the recipes you save on TikTok, Instagram, and Pinterest — even when they're only spoken in the video."
+    />
+    <meta property="og:title" content="Dilla — Share a reel. Get the recipe." />
+    <meta
+      property="og:description"
+      content="Dilla writes down the recipes you save on TikTok, Instagram, and Pinterest — even when they're only spoken in the video."
+    />
+    <meta property="og:image" content="https://recipe-vault-mh.netlify.app/press/assets/screenshots/01-share-story.png" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>
+    <!-- Netlify Forms needs a static form at deploy time; the Landing page
+         POSTs to it. Hidden — never rendered as UI. -->
+    <form name="launch-updates" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="email" name="email" />
+      <input name="bot-field" />
+    </form>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
