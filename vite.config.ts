@@ -43,7 +43,12 @@ export default defineConfig({
             },
             workbox: {
               navigateFallback: '/index.html',
-              navigateFallbackDenylist: [/^\/\.netlify\//],
+              // Static pages must reach the NETWORK, not the SPA shell: the
+              // fallback route otherwise hijacks them for every visitor with
+              // the service worker installed (the SPA router then bounces the
+              // unknown path to "/"). /press is linked from press pitches;
+              // /privacy and /support are linked from the paywall and stores.
+              navigateFallbackDenylist: [/^\/\.netlify\//, /^\/press(\/|$)/, /^\/privacy(\/|$)/, /^\/support(\/|$)/],
               globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
               // Press-kit assets are multi-MB downloads for journalists — never
               // precache them into every visitor's service worker (they also
