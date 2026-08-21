@@ -7,6 +7,7 @@
 //   APP_EMAIL, APP_PASSWORD (your app login), ANTHROPIC_API_KEY, GROQ_API_KEY.
 import dotenv from 'dotenv'
 import path from 'node:path'
+import { rm } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
@@ -179,14 +180,28 @@ async function processJob(supabase, job) {
   if (job.kind === 'video') {
     if (!APIFY) throw new Error('APIFY_TOKEN is not set — needed to fetch the reel video')
     if (!GROQ) console.warn('  (no GROQ_API_KEY — video will use frames only, lower confidence)')
-    const { recipe: r, imageUrl, author } = await extractVideoViaApify({
-      url: job.url,
-      apifyToken: APIFY,
-      apiKey: ANTHROPIC,
-      groqKey: GROQ,
-      ffmpeg: FFMPEG,
-      workdir: path.join(TOOLS, 'work', job.id),
-    })
+    // The transcript is deliberately NOT destructured here: it is never stored,
+    // logged, or attached to the job. Only the extracted recipe text survives.
+    const workdir = path.join(TOOLS, 'work', job.id)
+    let extracted
+    try {
+      extracted = await extractVideoViaApify({
+        url: job.url,
+        apifyToken: APIFY,
+        apiKey: ANTHROPIC,
+        groqKey: GROQ,
+        ffmpeg: FFMPEG,
+        workdir,
+      })
+    } finally {
+      // Delete the video, extracted audio, and sampled frames as soon as the
+      // extraction returns — success or failure. The cloud runner is ephemeral
+      // so nothing survived a run anyway, but "media is deleted after each job"
+      // is a claim we make to App Review and to users: it should be true in the
+      // CODE, not merely a side effect of the host being destroyed.
+      await rm(workdir, { recursive: true, force: true }).catch(() => {})
+    }
+    const { recipe: r, imageUrl, author } = extracted
     if (!r.found) throw new Error(r.notes || 'No recipe found in the video')
     recipe = toRecord(r, { url: job.url, sourcePlatform: isTikTokUrl(job.url) ? 'tiktok' : 'instagram', sourceKind: 'video' })
     if (!recipe.source_author && author) recipe.source_author = author

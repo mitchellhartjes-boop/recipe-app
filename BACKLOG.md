@@ -51,6 +51,31 @@ Owner-confirmed candidates, roughly ordered; final scope decided once real usage
 - **Collections / custom folders** beyond the automatic categories.
 - Family Sharing for Pro / iPad layout — candidates, unscoped.
 
+## 📊 Instrumentation — marketing's #1 ask (pre-launch where possible)
+
+Seven aggregate, first-party, server-side metrics. No third-party SDK (it would
+contradict the no-tracking position). Most are derivable from existing tables today;
+the ones marked (needs event) require new writes.
+
+1. Extraction outcome + completeness rate by source type — partly derivable now
+   (`extraction_meta.confidence`, ingredient/step counts); richer with the v2 receipt UI.
+2. Cook-through rate within 14 days — **already possible**: `recipe_recipes.times_made`
+   exists and is incremented by both Cook Mode completion and the "Made it" button.
+   Needs a first-cooked timestamp for the 14-day window (needs event, small).
+3. "View original" tap-through (needs event).
+4. Distribution of monthly imports across free users incl. **p90** — available NOW from
+   `recipe_usage`; this is the number that settles the tier conflict above.
+5. Activation funnel step completion (needs events).
+6. Cap-hit rate + cap-hitter conversion within 7 days — derivable now from
+   `recipe_usage` + `recipe_profiles`.
+7. Paywall funnel by trigger (needs events).
+
+**Blocking check before ANY new usage event ships:** the App Privacy questionnaire
+(docs/app-store-submission.md §5) already declares Usage Data → Product Interaction,
+linked to identity, purpose *App Functionality*. Metrics used for product analytics
+rather than enforcing plan limits may require adding the **Analytics** purpose to that
+label. Label update must land before/with the release that ships the events.
+
 ## 🔄 Continuous — server-side, ships anytime (no app release, no review)
 
 - **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians;
@@ -71,23 +96,52 @@ Owner-confirmed candidates, roughly ordered; final scope decided once real usage
   ≈$0.90/mo by the metering.)
 - **Register a DMCA agent with the US Copyright Office** (~$6, ~10 min) + `/terms` page with the
   takedown policy (Claude drafts on request).
+
+### Creator-relations / IP insurance (marketing, 2026-08-21 — cheap, fatal if unprepared)
+
+- **Server-side kill switch for link-in-bio recovery.** Highest-value item here: that
+  feature is mechanically what killed Recipeasly in 24 hours in 2021. A config toggle
+  (same pattern as `DISCOVER_SEARCH_NATIVE`) turns a multi-day crisis into a two-hour one.
+- `/creators` page: what Dilla writes down, what it never touches, how attribution works,
+  plus one-click handle-level opt-out.
+- Written repeat-infringer policy + a real takedown workflow (pairs with the DMCA agent).
+- Honest named bot User-Agent with a contact URL; honor robots.txt.
+- Source TikTok attribution from the official key-free oEmbed endpoint so a sanctioned
+  interface can be named in any 5.2.2 reply. (Already the case in `_lib/tiktok.mjs` —
+  verify before citing it.)
 - Rotate chat/binary-exposed secrets: `SHORTCUT_TOKEN`, old `tbgimscpdrdwsernwfni` service key,
   Apify proxy password, plus the older list (Anthropic/Groq keys, app password, PATs).
 - Transfer `finance-app` + the old Supabase project to a free org → Pro org bills $25 flat.
 - Netlify paid tier as traffic grows; custom SMTP for Supabase auth emails.
 
-## Tier strategy (REVISED 2026-08-14 — full model in docs/pricing-strategy.md)
+## Tier strategy (full model in docs/pricing-strategy.md)
 
-- **Launch at 20/5** (matches the store listing under review), then **tighten to 10/mo
-  incl 3 video in v2** — server flip (`plan_limits()` + PLANS) and description edit
-  together. Rationale (owner call): the monthly reset leaks — most users' steady-state
-  demand is under 20/mo, so a renewing 20 never forces a decision.
-- **v2 design decision: lifetime library cap** (free ≈ 25 recipes total; monthly video
-  metering stays as the cost guard; Pro = the big library). Category-proven structure —
-  conversion pressure grows with the collection instead of resetting monthly. Confirm
-  with week-1/2 data: users returning at the monthly reset without converting = smoking gun.
-- **7-day free trial on Monthly** (ASC intro offer, config at/after approval; paywall
-  copy line in v2). Pro stays $4.99/$29.99 = 200/40. Editing stays free forever.
+**⚠️ OPEN CONFLICT — needs Mitch's ruling before any v2 tier work starts.**
+- **Owner call, 2026-08-14:** tighten free to 10/mo incl 3 video in v2 — the monthly
+  reset leaks, since most users' steady-state demand is under 20/mo, so a renewing 20
+  never forces a decision.
+- **Marketing, 2026-08-21:** do NOT tighten — keep 20/month as an advertising asset
+  until real p90 import data justifies a change (removes a v2 item and a store-copy edit
+  from the critical path).
+- Both positions are defensible and the disagreement is empirical: the p90 of monthly
+  imports across free users settles it, and instrumentation (below) produces that number
+  within ~2 weeks of launch. Recommendation: **launch at 20/5, ship instrumentation,
+  decide with data** — which satisfies marketing's ask without abandoning the owner's,
+  since the tightening was always a v2 action anyway.
+
+Settled either way:
+- **Launch at 20/5** — matches the store listing under review. Non-negotiable sequencing:
+  server limits and the App Store description flip together, never separately.
+- **Trial: 30 days, fired at the cooking-layer paywall** (supersedes the earlier
+  7-day-on-monthly plan). Marketing's data: 17–32 day trials convert ~42.5% vs ~25.5%,
+  and the cost objection was arithmetic error — the ~$6 Pro ceiling is MONTHLY, so a
+  maxed 30-day trial costs ~$5.60 (~$2.50 after the Haiku lever).
+- **Lifetime library cap** stays a v2 candidate, to be decided with the same p90 data.
+- **Price:** marketing proposes $4.99→$6.99/mo and $29.99→$39.99/yr in week one, before
+  a subscriber anchor exists (Small Business Program confirmed = 85% net). OWNER
+  DECISION. If taken, it is not just an ASC change — the landing page, press kit, and
+  App Store description all quote the old prices and must move in the same batch.
+- Editing stays free forever.
 
 ## Known limit: audience-restricted reels
 
