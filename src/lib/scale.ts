@@ -120,7 +120,7 @@ const trimZeros = (s: string) => s.replace(/\.?0+$/, '')
  * Metric amounts as a cook would write them: no fractions, and precision that
  * drops as the number grows (nobody weighs 787 g of flour — they weigh 790).
  */
-function formatMetric(n: number, promoted: boolean): string {
+export function formatMetric(n: number, promoted: boolean): string {
   if (!isFinite(n) || n < 0) return ''
   if (promoted) return trimZeros(n.toFixed(2)) // e.g. 1.05 kg, 1.5 L, 2 kg
   if (n < 10) return trimZeros(n.toFixed(1))

@@ -3,6 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Recipe } from '../lib/types'
 import { scaleIngredient, parseServings } from '../lib/scale'
+import { convertIngredient, readUnits, writeUnits, type UnitSystem } from '../lib/units'
+import { useIsPro } from '../lib/usePlan'
+import UnitToggle from '../components/UnitToggle'
 import { groupIngredients } from '../lib/groupIngredients'
 import { addGroceryItems } from '../lib/useGrocery'
 import { useWakeLock } from '../lib/useWakeLock'
@@ -25,6 +28,8 @@ export default function RecipeDetail() {
   const [cookStart, setCookStart] = useState(0)
   const [grocery, setGrocery] = useState<'idle' | 'added'>('idle')
   const [grocerySheet, setGrocerySheet] = useState(false)
+  const [units, setUnits] = useState<UnitSystem>(readUnits)
+  const isPro = useIsPro()
 
   // Plenty of cooking happens straight off this page without ever opening Cook
   // Mode, so the screen has to stay awake here too — otherwise the phone blacks
@@ -122,7 +127,11 @@ export default function RecipeDetail() {
 
   const ingredients = recipe.ingredients ?? []
   const steps = recipe.steps ?? []
-  const scaledIngredients = ingredients.map((ing) => scaleIngredient(ing.raw, scale))
+  // Scale first, then convert: 2 cups -> 4 cups -> 480 g. Converting first
+  // would scale an already-converted number and compound any rounding.
+  const scaledIngredients = ingredients.map((ing) =>
+    convertIngredient(scaleIngredient(ing.raw, scale), units),
+  )
   const ingredientGroups = groupIngredients(ingredients)
   const times = [
     recipe.prep_minutes ? `${recipe.prep_minutes}m prep` : null,
@@ -223,6 +232,15 @@ export default function RecipeDetail() {
               </div>
             )}
           </div>
+          <UnitToggle
+            value={units}
+            onChange={(v) => {
+              setUnits(v)
+              writeUnits(v)
+            }}
+            isPro={isPro}
+            onNeedPro={() => navigate('/upgrade')}
+          />
           <div className="mt-3 space-y-4">
             {ingredientGroups.map((group, gi) => (
               <div key={group.section ?? gi}>
