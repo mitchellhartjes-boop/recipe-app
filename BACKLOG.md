@@ -32,7 +32,9 @@ Everything here is app-binary work (one Codemagic build + review cycle).
 7. ✅ **In-app review prompt** (spec: docs/marketing-specs/review-prompt.md) — native
    SKStoreReviewController at the 2nd Cook Mode completion (fallback: 10th import), with the
    spec's guards. Local flags only; no sentiment-gating.
-8. ⬜ **Free-tier flip to 10/mo incl 3 video** (BLOCKED — owner ruling, see Tier strategy) + matching description edit (see Tier strategy below).
+8. ⬜ **Free-tier flip to 10/mo incl 3 video** — DECIDED (owner, see Tier strategy). Ships as ONE
+   batch at v2 submission: `plan_limits()` + `_lib/usage.mjs` PLANS + App Store description +
+   landing page + press kit. Never flip the server alone — the live listing quotes the numbers.
 
 **Before submitting v2:** create the 30-day intro offer in App Store Connect (the
 paywall's trial line only appears once the store actually returns a free intro
@@ -123,18 +125,17 @@ label. Label update must land before/with the release that ships the events.
 
 ## Tier strategy (full model in docs/pricing-strategy.md)
 
-**⚠️ OPEN CONFLICT — needs Mitch's ruling before any v2 tier work starts.**
-- **Owner call, 2026-08-14:** tighten free to 10/mo incl 3 video in v2 — the monthly
-  reset leaks, since most users' steady-state demand is under 20/mo, so a renewing 20
-  never forces a decision.
-- **Marketing, 2026-08-21:** do NOT tighten — keep 20/month as an advertising asset
-  until real p90 import data justifies a change (removes a v2 item and a store-copy edit
-  from the critical path).
-- Both positions are defensible and the disagreement is empirical: the p90 of monthly
-  imports across free users settles it, and instrumentation (below) produces that number
-  within ~2 weeks of launch. Recommendation: **launch at 20/5, ship instrumentation,
-  decide with data** — which satisfies marketing's ask without abandoning the owner's,
-  since the tightening was always a v2 action anyway.
+**RULING (owner, 2026-08-27): free tier becomes 10/month including 3 video.**
+- Rationale: the monthly reset leaks. Most users' steady-state demand is under 20, so a
+  renewing 20 never forces a decision — it reads as a free product with a speed bump.
+- Marketing had argued for keeping 20 as an advertising asset pending p90 data; owner
+  overruled, and marketing has stood down (no further lobbying until data exists).
+- Shape is deliberate: 10 total with 3 video makes VIDEO the scarce thing, which is the
+  differentiator. "You've used your 3 video imports" is a wall that explains itself and
+  points straight at what Pro is for.
+- Blast radius is smallest NOW (a handful of users), and the value is server-side, so a
+  revert is minutes if reviews complain. Watch the first reviews after v2 ships.
+- Free-user cost ceiling drops from ~$1.00 to ~$0.45/month as a side effect.
 
 Settled either way:
 - **Launch at 20/5** — matches the store listing under review. Non-negotiable sequencing:
