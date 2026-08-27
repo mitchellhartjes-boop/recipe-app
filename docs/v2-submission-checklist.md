@@ -24,7 +24,7 @@ Recipes are yours to edit now.
 • A full week of meal slots instead of five.
 ```
 
-## 3. Description — ONE line changes (the free-tier flip)
+## 3. Description — the free-tier flip, and dropping the hard prices
 
 Find:
 
@@ -32,7 +32,16 @@ Find:
 
 Replace with:
 
-> Save up to 10 recipes a month free, including 3 video extractions. Dilla Pro raises that to 200 a month for $4.99/month or $29.99/year.
+> Save up to 10 recipes a month free, including 3 video extractions. Dilla Pro raises that to 200 a month, including 40 video imports.
+
+**Two changes in one line, and the second matters more than it looks.** Dropping
+the dollar figures is what turns price into a knob we can turn any time: App
+Store Connect price changes take effect immediately with NO review, but a
+*description* edit needs a whole version submission. Quoting prices in the
+description is what chained them together. Apple does not require it — the store
+page shows live subscription prices automatically, and the in-app paywall shows
+real StoreKit prices before purchase, which is what Guideline 3.1.2 actually
+asks for.
 
 Optional but worth it — add to the **BUILT FOR THE COUNTER** block:
 
@@ -42,19 +51,33 @@ Optional but worth it — add to the **BUILT FOR THE COUNTER** block:
 of Use lines exactly as they are — the Terms line is what cleared the first
 automated rejection.
 
-## 4. DECISION — the price change
+## 4. The price rise — now decoupled, so DON'T ship it with v2
 
-Marketing proposed $4.99 → **$6.99**/mo and $29.99 → **$39.99**/yr, arguing it
-roughly doubles profit per install and that price is cleanest to set before a
-subscriber anchor exists.
+Marketing (D-058) recommends staggering the rise to $6.99/$39.99 rather than
+stacking it on the free-tier cut, and the reasoning holds:
 
-- If YES: Monetization → Subscriptions → each product → **Price**. Takes effect
-  immediately, no review. **Existing subscribers keep their old price** unless
-  you explicitly opt to raise theirs (Apple asks; say no).
-- If NO: change nothing. The description quotes $4.99/$29.99 either way — so if
-  you DO raise prices, the description above must be updated in the same pass.
+- 10/3 already halves the free-user cost ceiling (~$1.00 → ~$0.45), so the rise
+  is no longer a survival argument, just an LTV one.
+- A user hitting the wall in v2 would meet a halved allowance AND a 40% rise in
+  the same moment — aimed at the exact cohort our pitch courts.
+- Stacked changes destroy attribution: 10/3 is the biggest conversion lever in
+  the plan and we would not be able to read it.
 
-Not deciding is also a decision: prices stay.
+Marketing costed this as "a second submission." With the prices out of the
+description (§3) **it costs nothing** — the rise becomes an ASC price edit,
+immediate, no review, no version.
+
+Decision rule, fixed in advance, using cap-hitter conversion from instrumentation:
+
+| Cap-hitter conversion | Action |
+|---|---|
+| ≥ 2% | Raise to $6.99 / $39.99 |
+| < 1% | Do NOT raise — it is a paywall-presentation problem |
+| In between | Raise annual to $39.99 only; leave monthly at $4.99 |
+
+Existing subscribers keep their price unless you explicitly opt them in (Apple
+asks — say no). Landing page and press kit quote prices too, but those are
+instant deploys with no review, so they simply move on the same day.
 
 ## 5. The 30-day free trial (optional, but the paywall is already built for it)
 

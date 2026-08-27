@@ -54,13 +54,19 @@ DISCOVER
 • Search for new recipes right inside Dilla and save what looks good on the spot
 
 FREE TO START
-Save up to 20 recipes a month free, including video extractions. Dilla Pro raises that to 200 a month for $4.99/month or $29.99/year.
+Save up to 10 recipes a month free, including 3 video extractions. Dilla Pro raises that to 200 a month, including 40 video imports.
 
 Your recipes are yours: no ads, no tracking, delete your account (and everything with it) anytime from Settings.
 
 Privacy Policy: https://recipe-vault-mh.netlify.app/privacy
 Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
 ```
+
+Note: the description deliberately does NOT quote dollar prices. Prices change in
+App Store Connect immediately with no review, but a description edit needs a
+version submission — quoting prices chains them together for no benefit. The
+store page shows live subscription prices on its own, and the in-app paywall
+shows real StoreKit prices before purchase (what Guideline 3.1.2 asks for).
 
 Note: the Terms of Use line in the description is REQUIRED by App Review for
 auto-renewable subscriptions when using Apple's standard EULA (first
