@@ -114,7 +114,7 @@ no "Data Used to Track You."
 ```
 Dilla saves recipes the user finds elsewhere into a personal, private library.
 
-NO ACCOUNT REQUIRED: tapping "Start cooking" on the first screen creates a session with no email, password, or personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
+NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
 
 HOW TO TEST IMPORT (no social media account needed):
 1) Open any recipe page in Safari (e.g. a food blog), tap Share, choose Dilla — a notification confirms when it's saved. Or:

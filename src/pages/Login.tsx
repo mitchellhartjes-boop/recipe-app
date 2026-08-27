@@ -95,7 +95,7 @@ export default function Login() {
               {busy ? 'One moment…' : 'Start cooking'}
             </button>
             <p className="mt-3 text-center text-xs leading-relaxed text-stone-500">
-              No account needed. Add an email later so your recipes follow you to a new phone.
+              No signup, no password. Add an email later so your recipes follow you to a new phone.
             </p>
             {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
           </div>
@@ -158,7 +158,7 @@ export default function Login() {
             <>
               New here?{' '}
               <button onClick={() => switchMode('welcome')} className="font-medium text-paprika-700 hover:underline">
-                Start without an account
+                Start without signing up
               </button>
             </>
           ) : (
