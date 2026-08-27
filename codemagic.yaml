@@ -131,10 +131,19 @@ workflows:
 
           echo "--- generated export options (bundle id -> profile) ---"
           cat "$HOME/export_options.plist" 2>/dev/null || echo "NONE — use-profiles produced no export options"
-      - name: Set build number
+      - name: Set version numbers
         script: |
+          set -e
           cd ios/App
           agvtool new-version -all $BUILD_NUMBER
+          # The MARKETING version (CFBundleShortVersionString) must be HIGHER than
+          # any already-approved version or App Store Connect rejects the upload
+          # with 90062 / "train is closed". agvtool updates every target, which
+          # also keeps the Share Extension in lockstep — a mismatch there is its
+          # own upload failure. Override by setting MARKETING_VERSION in the
+          # Codemagic env group when starting a new version train.
+          agvtool new-marketing-version "${MARKETING_VERSION:-1.1}"
+          echo "Marketing version: $(agvtool what-marketing-version -terse1)  build: $BUILD_NUMBER"
       - name: Build IPA
         script: |
           set -e

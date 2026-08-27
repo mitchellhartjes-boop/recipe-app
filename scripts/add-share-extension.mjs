@@ -506,7 +506,10 @@ for (const id of extConfigIds) {
   s.TARGETED_DEVICE_FAMILY = '"1"' // iPhone-only, matching the app (see below)
   s.SKIP_INSTALL = 'YES' // extensions are embedded, never installed standalone
   s.CODE_SIGN_STYLE = 'Manual'
-  s.MARKETING_VERSION = '1.0'
+  // Overwritten by agvtool in CI (see codemagic.yaml); this default only
+  // matters for a local sync. Keep it equal to the App target's version —
+  // an extension whose version differs from the app fails App Store upload.
+  s.MARKETING_VERSION = process.env.MARKETING_VERSION || '1.1'
   s.CURRENT_PROJECT_VERSION = '1'
   // The generated template can point at a non-existent bridging header.
   delete s.SWIFT_OBJC_BRIDGING_HEADER
