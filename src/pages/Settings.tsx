@@ -7,6 +7,7 @@ import { apiUrl } from '../lib/api'
 import { SunIcon, MoonIcon, LogOutIcon, TrashIcon, CheckIcon } from '../components/icons'
 import Portal from '../components/Portal'
 import { clearShareKey, shareKeyDiag, probeSharedStore } from '../lib/shareKey'
+import SecureAccount from '../components/SecureAccount'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -31,7 +32,7 @@ const PLAN_LIMITS: Record<string, number> = { free: 20, pro: 200 }
 
 export default function Settings() {
   const navigate = useNavigate()
-  const { session, signOut } = useAuth()
+  const { session, isAnonymous, signOut } = useAuth()
   const { dark, toggle } = useTheme()
   const [confirming, setConfirming] = useState(false)
   const [diagTaps, setDiagTaps] = useState(0)
@@ -186,14 +187,28 @@ export default function Settings() {
       </Section>
 
       <Section title="Account">
-        {email && (
-          <div className="border-b border-stone-100 px-4 py-3.5">
-            <p className="text-xs text-stone-500">Signed in as</p>
-            <p className="truncate text-sm font-medium text-ink">{email}</p>
+        {isAnonymous ? (
+          // No email yet: the recipes live only on this device's session. Say so
+          // plainly and make fixing it the easiest thing on the screen.
+          <div className="border-b border-stone-100 px-4 py-4">
+            <p className="mb-1 text-sm font-semibold text-ink">Save your recipes</p>
+            <SecureAccount reason="Your recipes are only on this phone right now. Add an email and password so you can get them back on a new device — nothing else changes." />
           </div>
+        ) : (
+          email && (
+            <div className="border-b border-stone-100 px-4 py-3.5">
+              <p className="text-xs text-stone-500">Signed in as</p>
+              <p className="truncate text-sm font-medium text-ink">{email}</p>
+            </div>
+          )
         )}
         <button
-          onClick={() => void signOut()}
+          onClick={() => {
+            // Signing out of an account with no email is unrecoverable — there
+            // is nothing to sign back IN to. Never let that happen silently.
+            if (isAnonymous && !confirm('You have no email on this account yet, so signing out will lose your recipes for good. Sign out anyway?')) return
+            void signOut()
+          }}
           className="flex w-full items-center gap-3 border-b border-stone-100 px-4 py-3.5 text-left transition active:bg-stone-50"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-600">

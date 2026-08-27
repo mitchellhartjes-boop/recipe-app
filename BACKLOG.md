@@ -85,6 +85,23 @@ linked to identity, purpose *App Functionality*. Metrics used for product analyt
 rather than enforcing plan limits may require adding the **Analytics** purpose to that
 label. Label update must land before/with the release that ships the events.
 
+## 🧹 Anonymous-account housekeeping (once anonymous sign-in is live)
+
+- Supabase does NOT auto-clean anonymous users; they accumulate in auth.users.
+  Purge only ones that never produced anything, so a real library is never
+  destroyed:
+  ```sql
+  delete from auth.users u
+  where u.is_anonymous is true
+    and u.created_at < now() - interval '60 days'
+    and not exists (select 1 from public.recipe_recipes r where r.user_id = u.id);
+  ```
+- Anonymous sign-in is IP rate limited to 30/hour (Supabase default). If abuse
+  appears, enable CAPTCHA (Auth > Attack Protection) — Supabase's recommended
+  mitigation for this endpoint.
+- Watch free-tier farming: reinstall = new anonymous user = fresh quota. Bounded
+  by the per-user cost ceiling, so it is a slow leak rather than a hole.
+
 ## 🔄 Continuous — server-side, ships anytime (no app release, no review)
 
 - **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians;

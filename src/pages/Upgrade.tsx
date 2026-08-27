@@ -13,6 +13,7 @@ import {
 } from '../lib/purchases'
 import { CheckIcon, FlameIcon } from '../components/icons'
 import { noteFrustration } from '../lib/reviewPrompt'
+import SecureAccount from '../components/SecureAccount'
 
 // Apple requires a Terms of Use link for auto-renewable subscriptions; the
 // standard Apple EULA satisfies it without writing our own.
@@ -40,7 +41,7 @@ function trialText(offering: ProOffering | null): string | null {
 
 export default function Upgrade() {
   const navigate = useNavigate()
-  const { session } = useAuth()
+  const { session, isAnonymous } = useAuth()
   const [offering, setOffering] = useState<ProOffering | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<'purchase' | 'restore' | null>(null)
@@ -130,7 +131,16 @@ export default function Upgrade() {
         ))}
       </ul>
 
-      {!purchasesAvailable() ? (
+      {/* A subscription bought on an account with no email cannot follow the
+          user to a new phone, and "I paid and lost it" is the worst possible
+          support ticket. Ask for the email BEFORE taking money — at this moment
+          the reason is obvious and nobody argues with it. */}
+      {isAnonymous ? (
+        <div className="mt-6 rounded-2xl bg-paper p-5 shadow-card">
+          <h2 className="mb-1 font-display text-lg font-semibold">First, save your account</h2>
+          <SecureAccount reason="Add an email and password so your subscription and recipes follow you to a new phone. Takes a second, and you stay right here." />
+        </div>
+      ) : !purchasesAvailable() ? (
         <p className="mt-6 rounded-2xl bg-paper p-5 text-center text-sm text-stone-500 shadow-card">
           Subscriptions are available in the Dilla iPhone app.
         </p>

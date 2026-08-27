@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Mode = 'signin' | 'signup' | 'forgot'
+// 'welcome' is the DEFAULT and the whole point: a new user should be importing
+// a recipe within seconds, not filling in a form. Anonymous sign-in creates a
+// real account (real user id, real row-level security, real quota) — it just
+// never asks them to type anything. Securing it with an email comes later, and
+// is required before they can subscribe (see Upgrade).
+type Mode = 'welcome' | 'signin' | 'signup' | 'forgot'
 
 // Where the password-reset email should land. On the web this origin is the
 // site itself; in the native app the origin is capacitor://localhost, which an
@@ -10,12 +15,28 @@ type Mode = 'signin' | 'signup' | 'forgot'
 const RESET_REDIRECT = `${import.meta.env.VITE_API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')}/reset`
 
 export default function Login() {
-  const [mode, setMode] = useState<Mode>('signin')
+  const [mode, setMode] = useState<Mode>('welcome')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  async function startCooking() {
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.auth.signInAnonymously()
+    if (error) {
+      // Falling back to the form is the right failure mode: the user can still
+      // get in, they just have to type. (Most likely cause: anonymous sign-ins
+      // not enabled on the Supabase project.)
+      setError('Could not start a quick session — you can create an account instead.')
+      setMode('signup')
+      setBusy(false)
+    }
+    // On success the auth listener swaps the whole screen out; leave `busy` set
+    // so the button can't be double-tapped during the transition.
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -63,42 +84,60 @@ export default function Login() {
             {mode === 'forgot' ? 'We’ll email you a link to choose a new one.' : 'Every recipe you love, in one place.'}
           </p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-paper p-6 shadow-card">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-stone-500">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
-              placeholder="you@example.com"
-            />
+
+        {mode === 'welcome' ? (
+          <div className="rounded-2xl bg-paper p-6 shadow-card">
+            <button
+              onClick={() => void startCooking()}
+              disabled={busy}
+              className="w-full rounded-xl bg-paprika-700 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 active:scale-[0.98] disabled:opacity-60"
+            >
+              {busy ? 'One moment…' : 'Start cooking'}
+            </button>
+            <p className="mt-3 text-center text-xs leading-relaxed text-stone-500">
+              No account needed. Add an email later so your recipes follow you to a new phone.
+            </p>
+            {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
           </div>
-          {mode !== 'forgot' && (
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl bg-paper p-6 shadow-card">
             <div>
-              <label className="mb-1 block text-xs font-medium text-stone-500">Password</label>
+              <label className="mb-1 block text-xs font-medium text-stone-500">Email</label>
               <input
-                type="password"
+                type="email"
                 required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
-                placeholder="••••••••"
+                placeholder="you@example.com"
               />
             </div>
-          )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {notice && <p className="text-sm text-paprika-700">{notice}</p>}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-paprika-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 disabled:opacity-60"
-          >
-            {cta}
-          </button>
-        </form>
+            {mode !== 'forgot' && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-stone-500">Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-paprika-400 focus:ring-2 focus:ring-paprika-100 dark:bg-stone-100 dark:focus:ring-paprika-900/40"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            {notice && <p className="text-sm text-paprika-700">{notice}</p>}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-xl bg-paprika-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-paprika-800 disabled:opacity-60"
+            >
+              {cta}
+            </button>
+          </form>
+        )}
+
         {mode === 'signin' && (
           <p className="mt-3 text-center">
             <button onClick={() => switchMode('forgot')} className="text-sm text-stone-400 hover:text-stone-600 hover:underline">
@@ -106,12 +145,20 @@ export default function Login() {
             </button>
           </p>
         )}
+
         <p className="mt-4 text-center text-sm text-stone-500">
-          {mode === 'signin' ? (
+          {mode === 'welcome' ? (
             <>
-              No account yet?{' '}
-              <button onClick={() => switchMode('signup')} className="font-medium text-paprika-700 hover:underline">
-                Create one
+              Already have an account?{' '}
+              <button onClick={() => switchMode('signin')} className="font-medium text-paprika-700 hover:underline">
+                Sign in
+              </button>
+            </>
+          ) : mode === 'signin' ? (
+            <>
+              New here?{' '}
+              <button onClick={() => switchMode('welcome')} className="font-medium text-paprika-700 hover:underline">
+                Start without an account
               </button>
             </>
           ) : (

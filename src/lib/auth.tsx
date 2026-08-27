@@ -7,12 +7,16 @@ import { clearShareKey } from './shareKey'
 type AuthContextValue = {
   session: Session | null
   loading: boolean
+  /** Signed in without ever giving an email — a real account with real data,
+   *  just no way to recover it yet. Drives the "secure your account" nudges. */
+  isAnonymous: boolean
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue>({
   session: null,
   loading: true,
+  isAnonymous: false,
   signOut: async () => {},
 })
 
@@ -40,8 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const isAnonymous = Boolean(session?.user?.is_anonymous)
+
   return (
-    <AuthContext.Provider value={{ session, loading, signOut }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, loading, isAnonymous, signOut }}>{children}</AuthContext.Provider>
   )
 }
 

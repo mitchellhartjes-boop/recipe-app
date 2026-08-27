@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useRecipes } from '../lib/useRecipes'
 import { recipeInCategory, TILE_BG } from '../lib/categories'
 import { useCategoryPrefs } from '../lib/useCategoryPrefs'
+import { useAuth } from '../lib/auth'
 import CategoryEditor from '../components/CategoryEditor'
 import Onboarding from '../components/Onboarding'
 import { hasOnboarded } from '../lib/onboarding'
@@ -86,6 +87,18 @@ export default function Library() {
   const { visible, all, isVisible, toggle, addCustom, removeCustom } = useCategoryPrefs()
   const [editing, setEditing] = useState(false)
   const [onboarding, setOnboarding] = useState(() => !hasOnboarded())
+  const { isAnonymous } = useAuth()
+  // Nudge once the library is worth losing — not on day one, when the warning
+  // would just be noise. Dismissible and remembered: Settings and the paywall
+  // still offer to secure the account, so this never needs to nag.
+  const [nudgeDismissed, setNudgeDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('dilla.secureNudgeDismissed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const showSecureNudge = isAnonymous && !nudgeDismissed && recipes.length >= 5
 
   // One pass over the recipes to count each VISIBLE category.
   const counts = useMemo(() => {
@@ -118,6 +131,32 @@ export default function Library() {
 
   return (
     <div className="space-y-5">
+      {showSecureNudge && (
+        <div className="flex items-start gap-3 rounded-xl bg-paprika-50 px-4 py-3">
+          <p className="flex-1 text-sm text-paprika-900">
+            <b>{recipes.length} recipes saved.</b> They only live on this phone — add an email in{' '}
+            <Link to="/settings" className="font-semibold underline underline-offset-2">
+              Settings
+            </Link>{' '}
+            so you can get them back on a new one.
+          </p>
+          <button
+            onClick={() => {
+              setNudgeDismissed(true)
+              try {
+                localStorage.setItem('dilla.secureNudgeDismissed', '1')
+              } catch {
+                /* private mode — it just reappears next launch */
+              }
+            }}
+            className="-mr-1 -mt-1 shrink-0 rounded-lg px-2 py-1 text-paprika-700/60 transition hover:text-paprika-900"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {queuedKind && (
         <p className="rounded-xl bg-paprika-50 px-4 py-3 text-sm text-paprika-800">
           Queued! {queuedKind === 'video' ? 'Pulling the recipe out of the video' : 'Recovering the full recipe from the blog'} — it’ll
