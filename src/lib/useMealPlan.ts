@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase'
 
-const SLOTS = 5
+const SLOTS = 7
 
-// Weekly meal plan: a single row per user holding 5 free-text slots. Stored in
+// Weekly meal plan: a single row per user holding 7 free-text slots — one per
+// day of the week. Stored in
 // Supabase (recipe_meal_plan) so it syncs across devices. Writes are debounced
 // so typing doesn't hammer the DB, but any pending write is FLUSHED immediately
 // when the tab is hidden / the app is backgrounded / the component unmounts —

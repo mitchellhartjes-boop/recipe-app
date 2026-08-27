@@ -245,6 +245,29 @@ async function processJob(supabase, job) {
   await notifyJob(supabase, job, { ok: true, title: recipe.title, recipeId: data.id })
 }
 
+// How many queued jobs to consider when picking the next one. Bounded on
+// purpose: within this window Pro goes first, but a free user's job can only
+// ever be passed by Pro jobs ALREADY ahead of it in the window, so it keeps
+// advancing rather than being starved indefinitely.
+const PRIORITY_WINDOW = 10
+
+// Pro imports jump the queue. One extra lookup, no schema change: the jobs are
+// already oldest-first, so the first Pro job in the window is the oldest Pro
+// job, and the fallback is simply the oldest job overall.
+async function pickJob(supabase, jobs) {
+  if (!jobs?.length) return null
+  if (jobs.length === 1) return jobs[0]
+  try {
+    const ids = [...new Set(jobs.map((j) => j.user_id).filter(Boolean))]
+    if (!ids.length) return jobs[0]
+    const { data: profiles } = await supabase.from('recipe_profiles').select('user_id, plan').in('user_id', ids)
+    const pro = new Set((profiles ?? []).filter((p) => p.plan === 'pro').map((p) => p.user_id))
+    return jobs.find((j) => pro.has(j.user_id)) ?? jobs[0]
+  } catch {
+    return jobs[0] // a plan lookup hiccup must never stall the queue
+  }
+}
+
 async function main() {
   const missing = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'APP_EMAIL', 'APP_PASSWORD', 'ANTHROPIC_API_KEY'].filter(
     (k) => !process.env[k] && !(k === 'VITE_SUPABASE_URL' && SUPABASE_URL) && !(k === 'VITE_SUPABASE_PUBLISHABLE_KEY' && SUPABASE_KEY),
@@ -302,10 +325,10 @@ async function main() {
     try {
       let query = supabase.from('recipe_jobs').select('*').eq('status', 'queued')
       if (KINDS.length) query = query.in('kind', KINDS)
-      const { data: jobs, error } = await query.order('created_at', { ascending: true }).limit(1)
+      const { data: jobs, error } = await query.order('created_at', { ascending: true }).limit(PRIORITY_WINDOW)
       if (error) throw error
       consecutivePollErrors = 0
-      const job = jobs?.[0]
+      const job = await pickJob(supabase, jobs)
       if (!job) {
         if (RUN_ONCE) {
           console.log('Queue empty — exiting (run-once mode).')

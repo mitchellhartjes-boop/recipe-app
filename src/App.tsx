@@ -20,6 +20,7 @@ import Landing from './pages/Landing'
 import EditRecipe from './pages/EditRecipe'
 import NewRecipe from './pages/NewRecipe'
 import { Capacitor } from '@capacitor/core'
+import { initReviewClock } from './lib/reviewPrompt'
 
 function Protected({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -50,6 +51,10 @@ export default function App() {
   // Register for push once there's a signed-in user, and re-register if the
   // account changes — the token is filed against whoever is signed in.
   usePushRegistration(session?.user?.id)
+  // Starts the install-age clock the review prompt waits on.
+  useEffect(() => {
+    initReviewClock()
+  }, [])
   // Logged-out WEB visitors at the root get the marketing page (first matching
   // route wins). Native app users and signed-in users fall through to the app;
   // while the session is still loading, the Protected route's spinner shows —

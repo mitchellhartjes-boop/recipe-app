@@ -5,6 +5,7 @@ import type { Recipe } from '../lib/types'
 import { scaleIngredient, parseServings } from '../lib/scale'
 import { convertIngredient, readUnits, writeUnits, type UnitSystem } from '../lib/units'
 import { useIsPro } from '../lib/usePlan'
+import { maybeAskAfterCook, maybeAskOnRecipeOpen, noteCookCompleted } from '../lib/reviewPrompt'
 import UnitToggle from '../components/UnitToggle'
 import { groupIngredients } from '../lib/groupIngredients'
 import { addGroceryItems } from '../lib/useGrocery'
@@ -45,6 +46,9 @@ export default function RecipeDetail() {
       if (error) setError(error.message)
       else setRecipe(data as Recipe)
       setLoading(false)
+      // Fallback rating ask, for people who import plenty but never open Cook
+      // Mode. Local guards run first, so this almost never touches the DB.
+      if (!error) void maybeAskOnRecipeOpen()
     })()
     return () => {
       active = false
@@ -113,6 +117,11 @@ export default function RecipeDetail() {
     if (finished) {
       void markMade()
       setTimeout(() => document.getElementById('rating')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+      // They just cooked something start to finish — the one honest moment to
+      // ask for a rating. The helper owns every guard (install age, repeat
+      // asks, a frustrating session) and no-ops when any of them fails.
+      noteCookCompleted()
+      void maybeAskAfterCook()
     }
   }
 

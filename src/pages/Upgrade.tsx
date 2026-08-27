@@ -12,6 +12,7 @@ import {
   type ProOffering,
 } from '../lib/purchases'
 import { CheckIcon, FlameIcon } from '../components/icons'
+import { noteFrustration } from '../lib/reviewPrompt'
 
 // Apple requires a Terms of Use link for auto-renewable subscriptions; the
 // standard Apple EULA satisfies it without writing our own.
@@ -20,9 +21,22 @@ const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stde
 const PERKS = [
   '200 recipes every month',
   'Includes 40 video recipes (TikTok & reels)',
-  'Everything imports the same way — share and it’s saved',
+  'Switch any recipe to metric or US units',
+  'Your video imports jump the queue',
   'Keeps the pantry stocked for new features first',
 ]
+
+// "N days free" is only shown when the store actually returns a free intro
+// offer, so the paywall can never promise a trial that isn't configured.
+function trialText(offering: ProOffering | null): string | null {
+  const intro = offering?.monthly?.product.introPrice ?? offering?.annual?.product.introPrice
+  if (!intro || intro.price > 0) return null
+  const n = intro.periodNumberOfUnits
+  const unit = String(intro.periodUnit ?? '').toLowerCase()
+  const word = unit.startsWith('day') ? 'day' : unit.startsWith('week') ? 'week' : unit.startsWith('month') ? 'month' : null
+  if (!n || !word) return null
+  return `Start with ${n} ${word}${n === 1 ? '' : 's'} free`
+}
 
 export default function Upgrade() {
   const navigate = useNavigate()
@@ -38,6 +52,9 @@ export default function Upgrade() {
   const [diagTaps, setDiagTaps] = useState(0)
 
   useEffect(() => {
+    // Landing on the paywall means they wanted something they could not have.
+    // Never follow that with "rate us".
+    noteFrustration()
     let cancelled = false
     void (async () => {
       if (session?.user?.id) await configurePurchases(session.user.id)
@@ -135,6 +152,12 @@ export default function Upgrade() {
         </div>
       ) : (
         <>
+          {trialText(offering) && (
+            <p className="mt-5 rounded-xl bg-paprika-50 px-3 py-2 text-center text-sm font-semibold text-paprika-800">
+              {trialText(offering)}
+            </p>
+          )}
+
           <div className="mt-5 space-y-2.5">
             {offering.monthly && (
               <PlanRow

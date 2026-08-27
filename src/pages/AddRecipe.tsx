@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { noteFrustration } from '../lib/reviewPrompt'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { extractRecipe, createJob } from '../lib/api'
 
@@ -37,6 +38,7 @@ export default function AddRecipe() {
 
       // Out of monthly imports -> the paywall IS the answer, not an error state.
       if (result.reason === 'limit_reached') {
+        noteFrustration() // hit a wall — don't ask for a rating this session
         navigate('/upgrade')
         return
       }
@@ -45,6 +47,7 @@ export default function AddRecipe() {
       // on the review screen so the user can act on it or enter the recipe manually.
       navigate('/review', { state: { draft: result.draft, banner: { kind: 'info', text: result.message } } })
     } catch (err) {
+      noteFrustration() // a failed import is the worst moment to ask for a rating
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
       setBusy(false)

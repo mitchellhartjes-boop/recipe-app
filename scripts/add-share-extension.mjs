@@ -346,7 +346,7 @@ proj.parseSync()
   // in a Sources phase (or it silently doesn't compile) AND a child of the App
   // group (or its path resolves one directory too high and the build fails with
   // "Build input file cannot be found").
-  const OWN_PLUGINS = ['SharedStorePlugin.swift', 'DillaBrowserPlugin.swift', 'DillaViewController.swift']
+  const OWN_PLUGINS = ['SharedStorePlugin.swift', 'DillaBrowserPlugin.swift', 'DillaViewController.swift', 'DillaReviewPlugin.swift']
   let changed = false
   for (const file of OWN_PLUGINS) {
     const inSources = Object.values(proj.hash.project.objects.PBXSourcesBuildPhase || {}).some(

@@ -54,7 +54,7 @@ export default function Grocery() {
         )}
       </div>
 
-      {/* This Week's Meals — 5 free-text slots, autosaved + synced. */}
+      {/* This Week's Meals — 7 free-text slots (a full week), autosaved + synced. */}
       <section className="mb-5 rounded-2xl bg-paper p-4 shadow-card">
         <h2 className="mb-3 font-display text-lg font-semibold">This Week’s Meals</h2>
         <div className="space-y-2">

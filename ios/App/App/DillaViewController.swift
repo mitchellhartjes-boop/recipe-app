@@ -12,5 +12,6 @@ class DillaViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(SharedStorePlugin())
         bridge?.registerPluginInstance(DillaBrowserPlugin())
+        bridge?.registerPluginInstance(DillaReviewPlugin())
     }
 }
