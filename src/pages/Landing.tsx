@@ -10,7 +10,7 @@ import { CheckIcon, FlameIcon, ClockIcon, CartIcon } from '../components/icons'
 
 // Swap for the official App Store badge + real link on approval day
 // (marketing spec: A-day task, also adds the apple-itunes-app smart banner).
-const APP_STORE_URL: string | null = null
+const APP_STORE_URL: string | null = 'https://apps.apple.com/app/id6793520987'
 
 function AppStoreButton() {
   const cls =
