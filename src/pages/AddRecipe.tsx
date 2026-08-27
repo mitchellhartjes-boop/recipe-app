@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { extractRecipe, createJob } from '../lib/api'
 
 export default function AddRecipe() {
@@ -95,6 +95,15 @@ export default function AddRecipe() {
         {busy && <p className="mt-3 text-sm text-stone-500">Working on it — just a few seconds.</p>}
         {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
       </form>
+
+      {/* No link to paste? Typing one in is free and unmetered — the monthly
+          limit exists to cover AI extraction, and this costs nothing. */}
+      <p className="mt-5 text-center text-sm text-stone-500">
+        No link to paste?{' '}
+        <Link to="/new" className="font-medium text-paprika-700 hover:underline">
+          Write a recipe yourself
+        </Link>
+      </p>
     </div>
   )
 }

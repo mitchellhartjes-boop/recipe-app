@@ -279,7 +279,13 @@ export default function RecipeDetail() {
         </div>
       )}
 
-      <div className="mt-10">
+      <div className="mt-10 flex items-center gap-5">
+        <Link
+          to={`/recipe/${recipe.id}/edit`}
+          className="text-sm font-medium text-paprika-700 transition hover:underline"
+        >
+          Edit recipe
+        </Link>
         <button onClick={remove} className="text-sm font-medium text-stone-400 transition hover:text-red-600">
           Delete recipe
         </button>

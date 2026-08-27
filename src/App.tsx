@@ -17,6 +17,8 @@ import ResetPassword from './pages/ResetPassword'
 import Upgrade from './pages/Upgrade'
 import Discover from './pages/Discover'
 import Landing from './pages/Landing'
+import EditRecipe from './pages/EditRecipe'
+import NewRecipe from './pages/NewRecipe'
 import { Capacitor } from '@capacitor/core'
 
 function Protected({ children }: { children: ReactNode }) {
@@ -67,6 +69,8 @@ export default function App() {
           <Route path="/add" element={<AddRecipe />} />
           <Route path="/review" element={<ReviewRecipe />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
+          <Route path="/recipe/:id/edit" element={<EditRecipe />} />
+          <Route path="/new" element={<NewRecipe />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/reset" element={<ResetPassword />} />
           <Route path="/upgrade" element={<Upgrade />} />
