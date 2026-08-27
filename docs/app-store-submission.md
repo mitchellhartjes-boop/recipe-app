@@ -114,6 +114,8 @@ no "Data Used to Track You."
 ```
 Dilla saves recipes the user finds elsewhere into a personal, private library.
 
+NO ACCOUNT REQUIRED: tapping "Start cooking" on the first screen creates a session with no email, password, or personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
+
 HOW TO TEST IMPORT (no social media account needed):
 1) Open any recipe page in Safari (e.g. a food blog), tap Share, choose Dilla — a notification confirms when it's saved. Or:
 2) In the app, tap Add and paste any recipe URL.
@@ -124,7 +126,7 @@ DISCOVER TAB: opens the selected platform's own public website in an in-app brow
 
 5.2.3 NOTE — NO MEDIA DOWNLOADING: Dilla has no capability to save, download, play back, export, or provide video/audio/media files to users, on device or via our servers. Shared links are analyzed transiently server-side solely to produce a plain-text recipe (title, ingredients, steps), similar to transcription; nothing is retained except the text. Every recipe shows creator attribution and a "View original" link back to the source platform.
 
-SUBSCRIPTIONS: Dilla Pro (monthly/annual, in this submission) raises the monthly import limit from 20 to 200. Purchases are processed by StoreKit via RevenueCat; the demo account is on the free tier, which is fully functional for review.
+SUBSCRIPTIONS: Dilla Pro (monthly/annual) raises the monthly import limit from 10 to 200. Purchases are processed by StoreKit via RevenueCat; the demo account is on the free tier, which is fully functional for review.
 
 ACCOUNT DELETION: Settings → Delete account (required by 5.1.1(v)) — removes all data immediately.
 ```
