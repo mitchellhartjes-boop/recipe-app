@@ -1,38 +1,45 @@
 # Dilla — roadmap & backlog
 
 See `CLAUDE.md` for architecture/runbook and `docs/app-store-submission.md` for the store package.
-**Status: v1.0 SUBMITTED to App Review (2026-07-28)** — version + both subscription products in one
-review bundle; `DISCOVER_SEARCH_NATIVE` is OFF for the review window.
+**Status: v1.0 APPROVED and RELEASED (App ID 6793520987). Quiet launch; v2 Phase A is built.**
 
-## ⏳ At approval (same day, server-side)
+## ✅ Done at approval
 
-- Flip `DISCOVER_SEARCH_NATIVE=true` on Netlify — native Discover result cards go live everywhere.
-- Verify one real production purchase + Restore Purchases on the App Store build.
+- ✅ `DISCOVER_SEARCH_NATIVE=true` — native Discover cards live everywhere.
+- ✅ App Store link + smart banner on the landing page and press kit.
+- ⬜ **OWNER:** verify one real production purchase + Restore Purchases on the store build.
 
 ---
 
-## 🚀 v2 — the fast follow (target: submit within ~2 weeks of approval)
+## 🚀 v2 — the fast follow (Phase A BUILT, awaiting a Codemagic build + submission)
 
 Theme: fix what week-one users will hit, and give Pro a story beyond bigger numbers.
 Everything here is app-binary work (one Codemagic build + review cycle).
 
-1. **Editable recipes + manual entry** (FREE for everyone — gating a user's own data reads as
+1. ✅ **Editable recipes + manual entry** (FREE for everyone — gating a user's own data reads as
    hostile). Edit any saved recipe in place (fix extraction typos, tweak amounts, add notes) and
    create a recipe from scratch. Reuse the ReviewRecipe form as the editing surface.
    The headliner: the #1 thing v1.0 users will ask for.
-2. **Measurement scaling cleanup** (`src/lib/scale.ts`, FREE): doubling/tripling currently produces
+2. ✅ **Measurement scaling cleanup** (`src/lib/scale.ts`, FREE): doubling/tripling currently produces
    awkward fractions/snaps — round scaled quantities to cook-friendly numbers.
-3. **Unit switching** (PRO perk): imperial ↔ metric, cups ↔ grams where convertible, on the recipe
+3. ✅ **Unit switching** (PRO perk): imperial ↔ metric, cups ↔ grams where convertible, on the recipe
    page and in Cook Mode.
-4. **Priority processing** (PRO perk, server + paywall copy): Pro users' video imports jump the
+4. ✅ **Priority processing** (PRO perk, server + paywall copy): Pro users' video imports jump the
    worker queue (order by plan, then created_at). "Your reels import first."
-5. **Grocery: up to 7 meal slots** in "This Week's Meals" (currently 5), or user-adjustable (FREE).
-6. **Paywall refresh**: perks list gains the two new Pro bullets + "7 days free" trial line;
+5. ✅ **Grocery: up to 7 meal slots** in "This Week's Meals" (currently 5), or user-adjustable (FREE).
+6. ✅ **Paywall refresh**: perks list gains the two new Pro bullets + "7 days free" trial line;
    retake the subscription review screenshot with live prices.
-7. **In-app review prompt** (spec: docs/marketing-specs/review-prompt.md) — native
+7. ✅ **In-app review prompt** (spec: docs/marketing-specs/review-prompt.md) — native
    SKStoreReviewController at the 2nd Cook Mode completion (fallback: 10th import), with the
    spec's guards. Local flags only; no sentiment-gating.
-8. **Free-tier flip to 10/mo incl 3 video** + matching description edit (see Tier strategy below).
+8. ⬜ **Free-tier flip to 10/mo incl 3 video** (BLOCKED — owner ruling, see Tier strategy) + matching description edit (see Tier strategy below).
+
+**Before submitting v2:** create the 30-day intro offer in App Store Connect (the
+paywall's trial line only appears once the store actually returns a free intro
+price); apply the price change WITH the description edit; check the App Privacy
+label if any instrumentation ships; flip `DISCOVER_SEARCH_NATIVE` OFF for the
+review window; smoke-test the review prompt cannot fire during review (it needs
+3 days of install age, so a fresh reviewer install will never see it).
 
 App Store version number: ship as 1.1 internally is fine, but marketing-wise call it what it is —
 decide at submission (Apple doesn't care).
