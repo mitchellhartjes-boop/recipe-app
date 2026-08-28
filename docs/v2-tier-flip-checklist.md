@@ -37,3 +37,26 @@ another.
 - Pro stays 200/40 at $4.99/$29.99 (the price change is a separate v2 decision).
 - Manual recipe entry stays unmetered — typing costs us nothing.
 - Editing stays free.
+
+## Privacy policy — the anonymous-account upgrade (ships WITH the v2 binary)
+
+`public/privacy/index.html` currently reads, deliberately neutral so it is true
+both before and after v2:
+
+> **Your account** — an account identified by a random ID, plus your email
+> address and password (stored only in securely hashed form by our database
+> provider) if you sign up with them.
+
+Once the v2 binary is LIVE on the App Store (not at submission — at release),
+upgrade it to the affirmative claim, which is a genuinely strong privacy
+position and only becomes true then:
+
+> **Your account** — you can use Dilla without telling us anything about
+> yourself: tapping "Start cooking" creates an account identified only by a
+> random ID, with no email and no password. Add an email later and we store it
+> along with a securely hashed password, so your library survives a new phone
+> and a subscription can be restored.
+
+Bump the "Effective" date in the same edit. Do NOT make this change earlier:
+until the binary ships, it would describe a flow users cannot reach — the same
+error marketing corrected in the published GTM plan (D-065).
