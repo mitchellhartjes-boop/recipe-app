@@ -27,11 +27,16 @@ export default function Login() {
     setError(null)
     const { error } = await supabase.auth.signInAnonymously()
     if (error) {
-      // Falling back to the form is the right failure mode: the user can still
-      // get in, they just have to type. (Most likely cause: anonymous sign-ins
-      // not enabled on the Supabase project.)
-      setError('Could not start a quick session — you can create an account instead.')
+      // Fall back to the form SILENTLY. The user asked to start cooking, not to
+      // hear about our auth configuration — an error here reads as "the app is
+      // broken" on the very first tap, which is worse than the signup screen we
+      // were trying to get rid of. A neutral line explains why the screen moved.
+      //
+      // This is deliberately not a feature flag: it is correct whether anonymous
+      // sign-ins are off (as during rollout), or momentarily unavailable, or
+      // rate limited. The screen is right in every state without a redeploy.
       setMode('signup')
+      setNotice('Create an account and you’re in — it only takes a moment.')
       setBusy(false)
     }
     // On success the auth listener swaps the whole screen out; leave `busy` set
