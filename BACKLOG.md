@@ -33,7 +33,9 @@ Everything here is app-binary work (one Codemagic build + review cycle).
    SKStoreReviewController at the 2nd Cook Mode completion (fallback: 10th import), with the
    spec's guards. Local flags only; no sentiment-gating.
 8. ⬜ **Free-tier flip to 10/mo incl 3 video** — DECIDED (owner, see Tier strategy). Ships as ONE
-   batch at v2 submission: `plan_limits()` + `_lib/usage.mjs` PLANS + App Store description +
+   batch at v2 APPROVAL, not submission (a version's description only goes live
+   when it is released; flipping earlier caps live v1.0 users at 10 while the
+   store still advertises 20): `plan_limits()` + `_lib/usage.mjs` PLANS + App Store description +
    landing page + press kit. Never flip the server alone — the live listing quotes the numbers.
 
 **Before submitting v2:** create the 30-day intro offer in App Store Connect (the

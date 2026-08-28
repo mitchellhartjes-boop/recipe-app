@@ -152,20 +152,35 @@ The app's data handling is unchanged from the approved 1.0: shared links are ana
 
 ## 8. Submit — and tell Claude FIRST
 
-Two things must happen on the dev side **in the same window as your submit**:
+**At submission, exactly ONE dev-side change:**
 
-1. **Free-tier flip to 10/3** — `plan_limits()` migration + `PLANS` deploy +
-   landing page + press kit, all together (see `v2-tier-flip-checklist.md`).
-   The description edit in §3 and this deploy must land together, or the live
-   listing and the live app disagree.
-2. **`DISCOVER_SEARCH_NATIVE` off** for the review window, so the reviewer sees
+1. **`DISCOVER_SEARCH_NATIVE` off** for the review window, so the reviewer sees
    the same browser-mode Discover that passed review the first time.
 
-So: finish §1–§7, say the word, let Claude run both, then hit **Add for Review →
-Submit**.
+**The free-tier flip does NOT happen here — it happens at APPROVAL.** (Corrected
+2026-08-28; the earlier version of this checklist had it at submission, which was
+wrong.)
+
+A version's description only goes live when that version is **released**, not
+when it is submitted. v1.0 is live right now and its description advertises
+**20/month**. Flipping the server at submission would cap every existing user at
+10 while the store still promises 20, for the whole review window — a month, last
+time. That is the exact listing-vs-app mismatch the batching rule exists to
+prevent, just pointing the other way.
+
+The reviewer seeing 20 in the app while the new description says 10 is not a
+risk: the app is *more* generous than described, and Apple rejects apps that
+promise more than they deliver, not less.
+
+So: finish §1–§7, say the word, Claude turns Discover native off, then hit
+**Add for Review → Submit**. The flip fires the day v2 is approved (§9).
 
 ## 9. After approval
 
+- **Run the free-tier flip to 10/3 NOW, as one batch**: `plan_limits()` +
+  `_lib/usage.mjs` PLANS + landing page + press kit, released together with the
+  v2 listing going live (see `v2-tier-flip-checklist.md`). Server and store then
+  say 10/3 at the same moment.
 - Flip `DISCOVER_SEARCH_NATIVE` back on.
 - Watch the first reviews for "only 10 free" complaints — the cap is server-side
   and revertible in minutes.

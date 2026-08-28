@@ -145,10 +145,12 @@ Paste the paragraph below into the notes ONLY when:
 2. [x] Supabase → Authentication → Sign In / Providers → **Anonymous Sign-Ins is ON**
        — verified 2026-08-28 by tapping "Start cooking" on production web: anonymous
        session created, `is_anonymous: true`, recipe written and read back under RLS.
-3. [ ] **Still open:** the same tap verified on the actual TestFlight build. Web
-       proves the server side; it does not prove the iOS plugin/registration path,
-       which is exactly where this project has been bitten before (SharedStore).
-       Do not paste until an iOS build has been tapped.
+3. [x] verified on the actual TestFlight build 2026-08-28 — owner confirmed the
+       full blocker set passed on device: "Start cooking" signs in, a shared reel
+       lands in the anonymous library, securing the account preserves everything,
+       the paywall gate behaves, and existing email accounts still work.
+
+**All three boxes ticked — the paragraph below is CLEARED to paste.**
 
 ```
 NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
