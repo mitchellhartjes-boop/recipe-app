@@ -192,7 +192,7 @@ export default function Settings() {
           // plainly and make fixing it the easiest thing on the screen.
           <div className="border-b border-stone-100 px-4 py-4">
             <p className="mb-1 text-sm font-semibold text-ink">Save your recipes</p>
-            <SecureAccount reason="Your recipes are only on this phone right now. Add an email and password so you can get them back on a new device — nothing else changes." />
+            <SecureAccount reason="Right now this device is the only way back into your recipes. Add an email and password so you can reach them from any device — nothing else changes." />
           </div>
         ) : (
           email && (

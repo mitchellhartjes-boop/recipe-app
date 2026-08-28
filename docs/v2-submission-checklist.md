@@ -11,7 +11,16 @@ App Store Connect → Dilla: Recipe Vault → **+ Version or Platform → iOS**,
 
 Then on that version page: **Build → select build 39** (the successful upload).
 
-> ### ⚠ Decide this BEFORE anything else: build 39 has no no-signup flow
+> ### ✅ DECIDED 2026-08-28: Option B. Do NOT submit build 39.
+>
+> Owner chose B. Supabase anonymous sign-ins are ON and verified on production
+> web (anonymous session created, `is_anonymous: true`, recipe written and read
+> back under RLS, purchase gate shown). A new build is being cut from `dab04e9`.
+> **Select that build, not 39.**
+>
+> Original framing kept below for the record:
+>
+> ### ⚠ build 39 has no no-signup flow
 >
 > Build 39 was cut before commit `605462c`. It contains all of v2 Phase A
 > (editing, manual entry, scaling, unit switching, priority, 7 meal slots) but
@@ -46,7 +55,11 @@ Recipes are yours to edit now.
 • Switch any recipe between metric and US units (Pro).
 • Pro imports jump the queue.
 • A full week of meal slots instead of five.
+• Start cooking straight away — no signup, no password. Add an email whenever you want your recipes on a new phone.
 ```
+
+The last line ships only because Option B was taken. If the build being
+submitted ever reverts to 39, remove it.
 
 ## 3. Description — the free-tier flip, and dropping the hard prices
 

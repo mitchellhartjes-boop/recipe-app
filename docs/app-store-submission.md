@@ -140,9 +140,15 @@ our own app is now unreliable to them.
 
 Paste the paragraph below into the notes ONLY when:
 
-1. [ ] the build being submitted was cut from `605462c` or later, **and**
-2. [ ] Supabase → Authentication → Sign In / Providers → **Anonymous Sign-Ins is ON**
-       (verified by actually tapping "Start cooking" on that build, not by reading the toggle).
+1. [x] the build being submitted was cut from `605462c` or later — satisfied by the
+       Option B build (`dab04e9`); **still false for build 39**, and
+2. [x] Supabase → Authentication → Sign In / Providers → **Anonymous Sign-Ins is ON**
+       — verified 2026-08-28 by tapping "Start cooking" on production web: anonymous
+       session created, `is_anonymous: true`, recipe written and read back under RLS.
+3. [ ] **Still open:** the same tap verified on the actual TestFlight build. Web
+       proves the server side; it does not prove the iOS plugin/registration path,
+       which is exactly where this project has been bitten before (SharedStore).
+       Do not paste until an iOS build has been tapped.
 
 ```
 NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
