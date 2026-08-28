@@ -11,6 +11,30 @@ App Store Connect → Dilla: Recipe Vault → **+ Version or Platform → iOS**,
 
 Then on that version page: **Build → select build 39** (the successful upload).
 
+> ### ⚠ Decide this BEFORE anything else: build 39 has no no-signup flow
+>
+> Build 39 was cut before commit `605462c`. It contains all of v2 Phase A
+> (editing, manual entry, scaling, unit switching, priority, 7 meal slots) but
+> **not** anonymous sign-in — a reviewer opening build 39 sees the signup form.
+> The anonymous work is committed and live on web; iOS needs a new binary.
+>
+> **Option A — ship build 39 now.** Fastest. The signup wall stays until the
+> next release. Reviewer notes must NOT mention "Start cooking" (the conditional
+> paragraph in `app-store-submission.md` §6 stays unpasted), and What's New says
+> nothing about signup.
+>
+> **Option B — cut a new build with `605462c`.** Costs one Codemagic run plus
+> TestFlight processing, and requires the Supabase anonymous toggle ON *first*,
+> or the flow dead-ends in the reviewer's hands. Buys the single biggest
+> activation fix available, in the same review cycle rather than one later.
+>
+> Marketing rates the signup wall as the top activation leak, which argues for B
+> — but B is only safe once the toggle is verified by tapping the button on a
+> real build. **Do not part-do this:** notes claiming the flow while the build
+> lacks it is the 2.1 rejection we already spent a month on.
+>
+> If B, add to What's New: `• Start cooking straight away — no signup, no password. Add an email whenever you want your recipes on a new phone.`
+
 ## 2. What's New in This Version  ← required for updates, wasn't needed for v1.0
 
 ```
@@ -102,8 +126,10 @@ configured. Do the same on Yearly if you want it there too.
 
 ## 7. App Review Information
 
-Demo account still valid — confirm the password works. Keep the existing notes and
-add:
+Demo account still valid — confirm the password works, and keep it valid even
+under Option B: anonymous sign-in does not replace the demo account, because a
+reviewer checking subscription restore needs a real signed-in account. Keep the
+existing notes and add:
 
 ```
 This update adds recipe editing and manual recipe entry (both free), improved ingredient scaling, unit switching between metric and US (Pro), priority processing for Pro imports, and a seven-day meal plan.

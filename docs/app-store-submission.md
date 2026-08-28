@@ -114,8 +114,6 @@ no "Data Used to Track You."
 ```
 Dilla saves recipes the user finds elsewhere into a personal, private library.
 
-NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
-
 HOW TO TEST IMPORT (no social media account needed):
 1) Open any recipe page in Safari (e.g. a food blog), tap Share, choose Dilla — a notification confirms when it's saved. Or:
 2) In the app, tap Add and paste any recipe URL.
@@ -130,6 +128,28 @@ SUBSCRIPTIONS: Dilla Pro (monthly/annual) raises the monthly import limit from 1
 
 ACCOUNT DELETION: Settings → Delete account (required by 5.1.1(v)) — removes all data immediately.
 ```
+
+### ⚠ Conditional paragraph — do NOT paste unless BOTH are true
+
+The no-signup flow is **not in build 39** (build 39 predates commit `605462c`),
+and it cannot run at all while anonymous sign-ins are disabled on the Supabase
+project. Telling a reviewer to tap "Start cooking" when the build shows a signup
+form is a false statement to Apple *and* a 2.1 "information needed" magnet — the
+reviewer follows the instruction, the button is not there, and our description of
+our own app is now unreliable to them.
+
+Paste the paragraph below into the notes ONLY when:
+
+1. [ ] the build being submitted was cut from `605462c` or later, **and**
+2. [ ] Supabase → Authentication → Sign In / Providers → **Anonymous Sign-Ins is ON**
+       (verified by actually tapping "Start cooking" on that build, not by reading the toggle).
+
+```
+NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device).
+```
+
+If either box is unchecked, the demo account in §6 is how the reviewer gets in,
+and the notes say nothing about signup. That is the safe default.
 
 ## 7. Screenshots
 
