@@ -125,15 +125,15 @@ export default async (req) => {
           recipe: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'caption', model: res.model, imageUrl: cover || res.imageUrl }),
         })
       }
-      // Couldn't read the reel at all (private / audience-restricted / removed).
+      // The anonymous embed couldn't read it — which an AGE GATE causes just as
+      // readily as a real audience restriction, and the two are indistinguishable
+      // from here. Apify reads Instagram logged in, so it clears an age gate and
+      // only truly fails on audience-restricted posts. Route it down the same
+      // ladder as video_only rather than declaring it unreadable: the client
+      // queues the job, and the worker either gets the recipe or says plainly
+      // that the post is restricted (refunding the slot when it does).
       if (res.inaccessible) {
-        return json({
-          ok: false,
-          reason: 'inaccessible',
-          message:
-            "Instagram wouldn't show this reel without logging in (it looks private or audience-restricted), so it can't be read automatically.",
-          draft: toDraft({ recipe: r, sourceUrl: url, sourcePlatform: 'instagram', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
-        })
+        return json({ ok: false, reason: 'video_only', message: 'This one needs a closer look — queuing it.' })
       }
       // Recipe is on the creator's blog. Same ladder as the share path: a link
       // in the caption -> fetch it; no link -> find the post on the creator's

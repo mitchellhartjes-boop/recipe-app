@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
 import { fetchReelViaApify } from '../netlify/functions/_lib/apify.mjs'
+import { refundImport } from '../netlify/functions/_lib/usage.mjs'
 import { isTikTokUrl } from '../netlify/functions/_lib/tiktok.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
 import { sendPush, apnsConfigured } from './lib/apns.mjs'
@@ -342,6 +343,19 @@ async function main() {
       } catch (e) {
         console.error(`[job ${job.id}] FAILED:`, e.message)
         await supabase.from('recipe_jobs').update({ status: 'failed', error: String(e.message).slice(0, 500) }).eq('id', job.id)
+        // Give the import slot back. The job failing means the user got NOTHING
+        // for it, and an audience-restricted reel is the common case — charging
+        // a video import for that burns 1 of only 3 a free user gets per month.
+        //
+        // Only when the job IS the import. A cover job or a steps backfill is a
+        // follow-up to a recipe that already saved and was already paid for;
+        // refunding those would hand out free imports on every cover hiccup.
+        const jobWasTheImport = !job.meta?.recipe_id && !job.meta?.backfill
+        if (jobWasTheImport && job.user_id) {
+          const kind = job.meta?.charged_kind || (job.kind === 'video' ? 'video' : 'web')
+          await refundImport(supabase, job.user_id, kind)
+          console.log(`[job ${job.id}] refunded a '${kind}' import`)
+        }
         // Tell the user it failed — they shared it and are waiting. Best-effort:
         // a push problem must not mask the original job failure.
         try {

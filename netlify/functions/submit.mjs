@@ -369,7 +369,7 @@ export default async (req) => {
         }
         chargedKind = 'video'
       }
-      const { data, error } = await insertJob(supabase, userId, { url: post.canonicalUrl, kind: 'video', meta: {} })
+      const { data, error } = await insertJob(supabase, userId, { url: post.canonicalUrl, kind: 'video', meta: { charged_kind: 'video' } })
       if (error) throw error
       keepCharge = true
       return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
@@ -397,15 +397,39 @@ export default async (req) => {
         keepCharge = true
         return json({ ok: true, status: 'saved', kind: 'caption', recipe_id: data.id, title: record.title, image_url: null, message: `Saved “${record.title}” to your library.` })
       }
-      // Couldn't read the reel at all (private / audience-restricted / removed). Don't queue a
-      // job that will only fail later on the worker — tell the user right away.
+      // The PUBLIC embed couldn't read it. That is NOT the same as unreadable:
+      // the anonymous embed is blocked by an AGE GATE just as surely as by a
+      // real audience restriction, and from out here the two look identical.
+      // Apify reads Instagram through logged-in accounts, so it walks straight
+      // through an age gate — it only genuinely fails on audience-restricted
+      // posts, where it returns restricted_page and the worker says so plainly.
+      //
+      // So hand it to the worker instead of guessing. An age-gated reel whose
+      // recipe sits in the caption used to fail outright; now it imports. If it
+      // really is restricted, the job fails and the worker refunds the slot.
       if (res.inaccessible) {
+        if (reservation.metered) {
+          await refundImport(meterAdmin, userId, chargedKind)
+          const videoRes = await reserveImport(meterAdmin, userId, 'video')
+          if (!videoRes.allowed) {
+            keepCharge = true // nothing left reserved to release
+            return json({ ok: false, status: 'limit_reached', kind: 'limit', message: limitMessage(videoRes) })
+          }
+          chargedKind = 'video'
+        }
+        const { data, error } = await insertJob(supabase, userId, {
+          url: link,
+          kind: 'video',
+          meta: { charged_kind: 'video' },
+        })
+        if (error) throw error
+        keepCharge = true
         return json({
-          ok: false,
-          status: 'inaccessible',
-          kind: 'instagram',
-          message:
-            "Couldn't read this reel — it looks private or audience-restricted, so Instagram only shows it to logged-in viewers. The app can't read it automatically.",
+          ok: true,
+          status: 'queued',
+          kind: 'video',
+          job_id: data.id,
+          message: 'Queued — this one needs a closer look. It’ll appear in a minute or two.',
         })
       }
       // Recipe is on the creator's blog, not in the caption. If the blog link is right there in
@@ -490,7 +514,7 @@ export default async (req) => {
           }
           chargedKind = 'video'
         }
-        const { data: vjob, error: vErr } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: {} })
+        const { data: vjob, error: vErr } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: { charged_kind: 'video' } })
         if (vErr) throw vErr
         keepCharge = true
         return json({ ok: true, status: 'queued', kind: 'video', job_id: vjob.id, message: 'Queued — reading the recipe from the video. It’ll appear in a minute or two.' })
@@ -511,7 +535,7 @@ export default async (req) => {
         }
         chargedKind = 'video'
       }
-      const { data, error } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: {} })
+      const { data, error } = await insertJob(supabase, userId, { url: link, kind: 'video', meta: { charged_kind: 'video' } })
       if (error) throw error
       keepCharge = true
       return json({ ok: true, status: 'queued', kind: 'video', job_id: data.id, message: 'Queued — the recipe’s in the video. It’ll appear in a minute or two.' })
