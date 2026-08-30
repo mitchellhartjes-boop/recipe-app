@@ -70,8 +70,10 @@ costs actual money rather than a bug report.
   fresh TestFlight install will never show it. That is also why a reviewer can't
   trigger it.
 - **Priority queue** is only observable under load; not worth testing by hand.
-- **~1 in 6 reels are audience-restricted** and cannot be read by anyone. If a
-  specific reel fails, try a different one before reporting it as a bug.
+- **Audience-restricted reels** ("can't be seen by certain audiences") cannot be
+  read by anyone — the restriction is per-viewer. The app now refunds the import
+  and points at the screenshot path. Age-gated reels are a DIFFERENT thing and
+  do import (fixed 2026-08-30).
 
 ---
 

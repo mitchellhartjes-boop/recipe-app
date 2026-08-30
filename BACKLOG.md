@@ -172,6 +172,18 @@ Settled either way:
 
 ## Known limit: audience-restricted reels
 
-~1 in 6 reels are audience-restricted ("can't be seen by certain audiences"). No third party can
-read these — the restriction is per-viewer. The app shows an honest message and suggests the
-screenshot path, which works for anything visible on screen.
+Two different things used to be lumped together here, and only one of them is a
+real limit.
+
+- **Age-gated** reels: the anonymous embed is refused, but Apify reads Instagram
+  through logged-in accounts and clears the gate. **These now import** (fixed
+  2026-08-30, verified on a live reel) — walled reels are handed to the worker
+  instead of being declared unreadable.
+- **Audience-restricted** reels ("can't be seen by certain audiences"): genuinely
+  unreadable. The restriction is per-viewer, so no third party can see them —
+  Apify returns `restricted_page`. The app says so plainly, refunds the import,
+  and suggests the screenshot path, which works for anything visible on screen.
+
+The old "~1 in 6 reels are unreadable" figure counted both categories and is
+therefore too pessimistic. Do not quote it until real numbers exist — the
+instrumentation item above (extraction outcome by source type) is what settles it.
