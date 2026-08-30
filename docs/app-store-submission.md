@@ -44,6 +44,7 @@ BUILT FOR THE COUNTER
 • Times written in a step become one-tap timers that keep counting while you move on
 • The screen stays awake while your hands are covered in flour
 • Scale the servings and every quantity rescales
+• Edit any recipe, or write one from scratch — free, and it never counts against your monthly imports
 
 PLAN THE WEEK
 • Send a recipe's ingredients to your grocery list — just the ones you're missing
@@ -54,7 +55,7 @@ DISCOVER
 • Search for new recipes right inside Dilla and save what looks good on the spot
 
 FREE TO START
-Save up to 10 recipes a month free, including 3 video extractions. Dilla Pro raises that to 200 a month, including 40 video imports.
+No signup, no card — tap once and start saving. Keep up to 10 recipes a month free, including 3 video extractions. Dilla Pro raises that to 200 a month, including 40 video imports. Add an email whenever you want your recipes on a new phone.
 
 Your recipes are yours: no ads, no tracking, delete your account (and everything with it) anytime from Settings.
 
@@ -113,6 +114,8 @@ no "Data Used to Track You."
 
 ```
 Dilla saves recipes the user finds elsewhere into a personal, private library.
+
+NO SIGNUP REQUIRED: tapping "Start cooking" on the first screen signs the user in anonymously — an account is created, but it collects no email, password, or other personal information. An email can be added later from Settings (and is required only before purchasing a subscription, so it can be restored on a new device). Sign-in credentials are provided below for testing the signed-in paths.
 
 HOW TO TEST IMPORT (no social media account needed):
 1) Open any recipe page in Safari (e.g. a food blog), tap Share, choose Dilla — a notification confirms when it's saved. Or:
