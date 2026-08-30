@@ -1,7 +1,8 @@
 # Dilla — roadmap & backlog
 
 See `CLAUDE.md` for architecture/runbook and `docs/app-store-submission.md` for the store package.
-**Status: v1.0 APPROVED and RELEASED (App ID 6793520987). Quiet launch; v2 Phase A is built.**
+**Status: v1.0 released (App ID 6793520987). v2 (1.1) SUBMITTED 2026-08-30 — awaiting review.**
+**On approval, run the tier-flip batch (docs/v2-tier-flip-checklist.md) and turn `DISCOVER_SEARCH_NATIVE` back on.**
 
 ## ✅ Done at approval
 
