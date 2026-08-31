@@ -4,6 +4,7 @@
 //   - Generic web page   -> extractWebPage (JSON-LD aware)         (fast, serverless)
 //   - Link-in-bio        -> recoverFromWeb (Claude web_search)     (slow, async/worker)
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchViaProxy, proxyConfigured, BLOCKED_STATUSES } from './proxyFetch.mjs'
 
 // Cost-optimized default for clean caption/page extraction. Override via env
 // (EXTRACTION_MODEL=claude-sonnet-4-6 or claude-opus-4-8) for higher fidelity.
@@ -325,10 +326,46 @@ export async function resolvePinterestLink(url) {
 // recipe publishers (Dotdash Meredith sites answer 402, Cloudflare ones 403)
 // serve these to any server-side fetch no matter how honest the User-Agent is,
 // so the caller should tell the user to screenshot rather than report an error.
-const BLOCKED_STATUSES = new Set([401, 402, 403, 406, 429, 451])
+// BLOCKED_STATUSES now lives with the proxy fallback that consumes it.
+
+/**
+ * Fetch a page, and if a bot shield answers, try once more from a residential
+ * IP. The retry is what makes allrecipes/Serious Eats/Food Network work at all
+ * from our servers — see proxyFetch.mjs for the measurements.
+ *
+ * If the proxy isn't configured, or it also fails, we throw exactly the error
+ * we always threw, so every caller's blocked-site handling still applies.
+ */
+async function fetchPageAllowingBlocked(url) {
+  const headers = { 'User-Agent': WEB_UA, 'Accept-Language': 'en-US,en;q=0.9' }
+  let res
+  try {
+    res = await fetch(url, { headers })
+  } catch (e) {
+    // A transport-level failure is not a bot shield; don't spend proxy bytes.
+    throw e
+  }
+  if (res.ok || !BLOCKED_STATUSES.has(res.status) || !proxyConfigured()) return res
+
+  const direct = res.status
+  try {
+    const viaProxy = await fetchViaProxy(url, { headers })
+    if (viaProxy.ok) {
+      console.info(`[extract] ${new URL(url).hostname} refused us (${direct}); residential proxy got ${viaProxy.status}`)
+      return viaProxy
+    }
+    // Blocked through the proxy too — report the ORIGINAL status, since that is
+    // the one that describes our normal path.
+    console.warn(`[extract] ${new URL(url).hostname} blocked direct (${direct}) AND via proxy (${viaProxy.status})`)
+    return res
+  } catch (e) {
+    console.warn(`[extract] proxy retry failed for ${url}: ${e.message}`)
+    return res
+  }
+}
 
 export async function extractWebPage({ url, apiKey }) {
-  const res = await fetch(url, { headers: { 'User-Agent': WEB_UA, 'Accept-Language': 'en-US,en;q=0.9' } })
+  const res = await fetchPageAllowingBlocked(url)
   if (!res.ok) {
     const err = new Error(`Web page fetch failed (HTTP ${res.status})`)
     err.status = res.status
