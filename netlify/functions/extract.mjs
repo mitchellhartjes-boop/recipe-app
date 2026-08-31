@@ -220,24 +220,11 @@ export default async (req) => {
     // nicely for a while; this path was still handing the user
     // "Web page fetch failed (HTTP 403)", which reads as the app being broken.
     if (e?.blocked) {
-      let host = ''
-      try { host = new URL(url).hostname.replace(/^www\./, '') } catch { /* keep it generic */ }
-      return json({
-        ok: false,
-        reason: 'no_recipe',
-        message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
-        // A draft is REQUIRED here, empty or not: the review screen bounces
-        // straight back to /add when there isn't one, so omitting it makes the
-        // whole attempt vanish with no message at all.
-        draft: toDraft({
-          recipe: {},
-          sourceUrl: url,
-          sourcePlatform: 'web',
-          sourceKind: 'manual',
-          model: null,
-          imageUrl: null,
-        }),
-      })
+      // The publisher refuses our datacenter IP. The worker can still get it
+      // via Apify, so hand it to the queue rather than telling the user to go
+      // take a screenshot. 'blocked_queue' (not 'video_only') so the client
+      // queues the right KIND of job and can say something accurate.
+      return json({ ok: false, reason: 'blocked_queue', message: 'Fetching that one another way — it’ll appear in a minute or two.' })
     }
     return json({ error: e?.message || 'Extraction failed' }, 502)
   } finally {

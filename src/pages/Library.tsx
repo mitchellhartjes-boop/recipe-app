@@ -159,8 +159,13 @@ export default function Library() {
 
       {queuedKind && (
         <p className="rounded-xl bg-paprika-50 px-4 py-3 text-sm text-paprika-800">
-          Queued! {queuedKind === 'video' ? 'Pulling the recipe out of the video' : 'Recovering the full recipe from the blog'} — it’ll
-          appear here automatically.
+          Queued!{' '}
+          {queuedKind === 'video'
+            ? 'Pulling the recipe out of the video'
+            : queuedKind === 'web'
+              ? 'That site is slow to open up, so we’re fetching it another way'
+              : 'Recovering the full recipe from the blog'}{' '}
+          — it’ll appear here automatically.
         </p>
       )}
 

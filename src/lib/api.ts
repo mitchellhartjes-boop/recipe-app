@@ -23,7 +23,7 @@ export type ExtractResult =
   | { ok: true; source_kind: string; recipe: DraftRecipe }
   | {
       ok: false
-      reason: 'link_in_bio' | 'video_only' | 'no_recipe' | 'inaccessible' | 'limit_reached'
+      reason: 'link_in_bio' | 'video_only' | 'blocked_queue' | 'no_recipe' | 'inaccessible' | 'limit_reached'
       message: string
       draft: DraftRecipe
       recover?: { title: string | null; author: string | null; externalUrl: string | null } | null
@@ -60,7 +60,7 @@ export async function extractRecipe(url: string): Promise<ExtractResult> {
 // Queue a slow job (link-in-bio recovery or video) for the worker to process.
 export async function createJob(
   url: string,
-  kind: 'link_in_bio' | 'video',
+  kind: 'link_in_bio' | 'video' | 'web',
   meta: Record<string, unknown> = {},
 ): Promise<string> {
   const { data, error } = await supabase

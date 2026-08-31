@@ -109,3 +109,59 @@ export async function fetchTikTokViaApify(url, token, { timeoutMs = 120000 } = {
     subtitleUrl: sub?.downloadLink || sub?.tiktokLink || null,
   }
 }
+
+// Web page via Apify, for publishers that refuse datacenter IPs.
+//
+// Measured 2026-08-30 from Netlify: allrecipes/Serious Eats/Simply Recipes
+// answer 402 and Food Network/The Kitchn 403, with a current Chrome UA, while
+// the same URLs return 200 from a residential IP. Apify's proxy cannot be used
+// from OUTSIDE their platform on our plan ("Proxy external access isn't enabled
+// for your account"), but an ACTOR runs inside it, so it can use the proxy the
+// ordinary way. That is why this goes through an actor rather than a proxy.
+//
+// cheerio crawler, not a browser: recipe pages carry their recipe in JSON-LD
+// and static HTML, so paying for a headless browser buys nothing here.
+const WEB_ACTOR = 'apify~website-content-crawler'
+
+export async function fetchPageViaApify(url, token, { timeoutMs = 120000, proxyGroup } = {}) {
+  if (!token) throw new Error('APIFY_TOKEN is not set')
+  const endpoint = `https://api.apify.com/v2/acts/${WEB_ACTOR}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`
+  const input = {
+    startUrls: [{ url }],
+    crawlerType: 'cheerio',
+    maxCrawlDepth: 0,
+    maxCrawlPages: 1,
+    maxResults: 1,
+    saveMarkdown: true,
+    saveHtml: true,
+    proxyConfiguration: proxyGroup
+      ? { useApifyProxy: true, apifyProxyGroups: [proxyGroup] }
+      : { useApifyProxy: true },
+  }
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  let body
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) throw new Error(`Apify web run failed (HTTP ${res.status})`)
+    body = await res.json()
+  } finally {
+    clearTimeout(timer)
+  }
+
+  const item = Array.isArray(body) ? body[0] : null
+  if (!item) throw new Error('Apify returned no data for that page')
+  // The crawler reports a page it could not load rather than throwing.
+  if (item.crawl?.httpStatusCode && item.crawl.httpStatusCode >= 400) {
+    throw new Error(`That site returned HTTP ${item.crawl.httpStatusCode} even through Apify`)
+  }
+  const text = item.markdown || item.text || ''
+  if (!text.trim()) throw new Error('Apify loaded the page but it had no readable text')
+  return { text, html: item.html || '', imageUrl: item.metadata?.image || null, title: item.metadata?.title || null }
+}

@@ -572,11 +572,22 @@ export default async (req) => {
       // recipe publishers that Pinterest pins point at, and it is not something
       // a retry fixes — the screenshot path reads what the USER can see.
       if (e?.blocked) {
-        return json({
-          ok: false,
-          status: 'blocked',
+        // Not a dead end any more: the worker can reach these through Apify,
+        // which runs inside their platform and so can use their proxy. Queue it
+        // rather than sending the user off to take a screenshot.
+        const { data, error } = await insertJob(supabase, userId, {
+          url: link,
           kind: 'web',
-          message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
+          meta: { charged_kind: chargedKind },
+        })
+        if (error) throw error
+        keepCharge = true
+        return json({
+          ok: true,
+          status: 'queued',
+          kind: 'web',
+          job_id: data.id,
+          message: `${host || 'That site'} is slow to open up — fetching it another way. It'll appear in a minute or two.`,
         })
       }
       throw e

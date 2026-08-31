@@ -9,9 +9,9 @@ import dotenv from 'dotenv'
 import path from 'node:path'
 import { rm } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
-import { recoverFromWeb, fetchPageOgImage } from '../netlify/functions/_lib/extract.mjs'
+import { recoverFromWeb, fetchPageOgImage, extractRecipeFromText } from '../netlify/functions/_lib/extract.mjs'
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
-import { fetchReelViaApify } from '../netlify/functions/_lib/apify.mjs'
+import { fetchReelViaApify, fetchPageViaApify } from '../netlify/functions/_lib/apify.mjs'
 import { refundImport } from '../netlify/functions/_lib/usage.mjs'
 import { isTikTokUrl } from '../netlify/functions/_lib/tiktok.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
@@ -207,6 +207,29 @@ async function processJob(supabase, job) {
     recipe = toRecord(r, { url: job.url, sourcePlatform: isTikTokUrl(job.url) ? 'tiktok' : 'instagram', sourceKind: 'video' })
     if (!recipe.source_author && author) recipe.source_author = author
     coverHint = imageUrl
+  } else if (job.kind === 'web') {
+    // A publisher that refuses our datacenter IP. Apify's actor runs inside
+    // their platform, so it reaches the page through their proxy - the thing we
+    // cannot do directly on this plan. See fetchPageViaApify for the numbers.
+    //
+    // RESIDENTIAL is tried only as a SECOND attempt: it costs meaningfully more
+    // than the default pool, and plenty of these sites are only screening out
+    // obvious datacenter ranges rather than running a real fingerprint check.
+    let page
+    try {
+      page = await fetchPageViaApify(job.url, APIFY)
+    } catch (first) {
+      console.warn(`[job ${job.id}] default proxy pool failed (${first.message}); retrying residential`)
+      page = await fetchPageViaApify(job.url, APIFY, { proxyGroup: 'RESIDENTIAL' })
+    }
+    const { recipe: r } = await extractRecipeFromText({
+      text: page.text,
+      sourceUrl: job.url,
+      apiKey: ANTHROPIC,
+    })
+    if (!r.found) throw new Error(r.notes_for_user || 'No recipe found on that page')
+    recipe = toRecord(r, { url: job.url, sourcePlatform: 'web', sourceKind: 'web' })
+    coverHint = page.imageUrl
   } else if (job.kind === 'link_in_bio') {
     const { recipe: r } = await recoverFromWeb({
       title: job.meta?.title,

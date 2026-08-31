@@ -48,6 +48,6 @@ jobs:
           APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
           APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
           WORKER_RUN_ONCE: '1'
-          WORKER_KINDS: link_in_bio,video,cover # video via Apify's direct URL; cover = backfill a caption reel's image via Apify
+          WORKER_KINDS: link_in_bio,video,cover,web # video via Apify's direct URL; cover = backfill a caption reel's image via Apify; web = publishers that refuse our datacenter IP
           FFMPEG_PATH: ffmpeg # from the apt-get install step above
         run: node worker/index.mjs

@@ -36,6 +36,14 @@ export default function AddRecipe() {
         return
       }
 
+      // The site refuses our servers' IP. The worker reaches it through Apify,
+      // so this is a delay rather than a failure - same queue, different kind.
+      if (result.reason === 'blocked_queue') {
+        await createJob(link, 'web', {})
+        navigate('/', { state: { queued: 'web' } })
+        return
+      }
+
       // Out of monthly imports -> the paywall IS the answer, not an error state.
       if (result.reason === 'limit_reached') {
         noteFrustration() // hit a wall — don't ask for a rating this session
