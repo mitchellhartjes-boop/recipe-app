@@ -226,6 +226,17 @@ export default async (req) => {
         ok: false,
         reason: 'no_recipe',
         message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
+        // A draft is REQUIRED here, empty or not: the review screen bounces
+        // straight back to /add when there isn't one, so omitting it makes the
+        // whole attempt vanish with no message at all.
+        draft: toDraft({
+          recipe: {},
+          sourceUrl: url,
+          sourcePlatform: 'web',
+          sourceKind: 'manual',
+          model: null,
+          imageUrl: null,
+        }),
       })
     }
     return json({ error: e?.message || 'Extraction failed' }, 502)

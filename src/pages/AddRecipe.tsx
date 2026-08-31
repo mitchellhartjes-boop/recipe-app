@@ -48,6 +48,16 @@ export default function AddRecipe() {
 
       // link_in_bio (open the blog link & share it), inaccessible, or no recipe -> show the message
       // on the review screen so the user can act on it or enter the recipe manually.
+      //
+      // But ONLY if there is a draft. /review redirects back here when it has
+      // none, which silently ate both the attempt and the explanation — the
+      // user saw "working on it" and then nothing. If a response ever arrives
+      // without a draft, say so here rather than navigating into a bounce.
+      if (!result.draft) {
+        noteFrustration()
+        setError(result.message || "Couldn't read that link.")
+        return
+      }
       navigate('/review', { state: { draft: result.draft, banner: { kind: 'info', text: result.message } } })
     } catch (err) {
       noteFrustration() // a failed import is the worst moment to ask for a rating
