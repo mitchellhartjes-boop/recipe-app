@@ -25,7 +25,15 @@ const PROXY_PORT = 8000
  *  through a paid proxy would spend money to fail identically. */
 export const BLOCKED_STATUSES = new Set([401, 402, 403, 406, 429, 451])
 
-export const proxyConfigured = () => Boolean(process.env.APIFY_PROXY_PASSWORD)
+// Set once the proxy tells us this account can't use it. Apify gates external
+// proxy access behind a paid plan and answers 403 "Proxy external access isn't
+// enabled for your account" — a permanent condition, not a transient failure.
+// Without this latch, every blocked page would pay an extra round trip to be
+// told the same thing again.
+let externallyDisabled = false
+export const markProxyUnavailable = () => { externallyDisabled = true }
+
+export const proxyConfigured = () => Boolean(process.env.APIFY_PROXY_PASSWORD) && !externallyDisabled
 
 let agent = null
 function proxyAgent() {
@@ -50,7 +58,19 @@ export async function fetchViaProxy(url, { headers = {}, timeoutMs = 20000 } = {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    return await undiciFetch(url, { headers, dispatcher, signal: ctrl.signal })
+    const res = await undiciFetch(url, { headers, dispatcher, signal: ctrl.signal })
+    // 403 from the PROXY (not the site) means the account can't use it at all.
+    // Read the body to be sure before latching — a site's own 403 arrives here
+    // too, and disabling the proxy because one publisher refused us would be
+    // exactly the wrong lesson to learn.
+    if (res.status === 403) {
+      const body = await res.clone().text().catch(() => '')
+      if (/proxy external access|isn't enabled for your account/i.test(body)) {
+        console.warn('[proxy] Apify reports external proxy access is not enabled for this account; disabling retries')
+        markProxyUnavailable()
+      }
+    }
+    return res
   } finally {
     clearTimeout(timer)
   }
