@@ -39,7 +39,10 @@ export default function AddRecipe() {
       // Out of monthly imports -> the paywall IS the answer, not an error state.
       if (result.reason === 'limit_reached') {
         noteFrustration() // hit a wall — don't ask for a rating this session
-        navigate('/upgrade')
+        // Carry the REASON. Landing on the paywall with no explanation reads as
+        // "this feature is Pro-only" rather than "you've used this month's
+        // imports" — which is what it actually is, and a very different thing.
+        navigate('/upgrade', { state: { reason: result.message } })
         return
       }
 

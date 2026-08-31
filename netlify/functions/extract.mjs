@@ -216,6 +216,18 @@ export default async (req) => {
       draft: toDraft({ recipe: res.recipe, sourceUrl: url, sourcePlatform: 'web', sourceKind: 'manual', model: res.model, imageUrl: res.imageUrl }),
     })
   } catch (e) {
+    // A bot shield answered instead of the page. submit.mjs has said this
+    // nicely for a while; this path was still handing the user
+    // "Web page fetch failed (HTTP 403)", which reads as the app being broken.
+    if (e?.blocked) {
+      let host = ''
+      try { host = new URL(url).hostname.replace(/^www\./, '') } catch { /* keep it generic */ }
+      return json({
+        ok: false,
+        reason: 'no_recipe',
+        message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
+      })
+    }
     return json({ error: e?.message || 'Extraction failed' }, 502)
   } finally {
     // No draft came back (or it threw) — hand the slot back rather than charging

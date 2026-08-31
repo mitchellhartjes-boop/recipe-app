@@ -31,8 +31,13 @@ const EMBED_UA =
 export const instagramEmbedEnabled = () => process.env.INSTAGRAM_EMBED_ENABLED !== 'false'
 
 // Normal browser UA for fetching generic recipe pages.
+// MAINTENANCE: bump the Chrome version roughly yearly. Publishers' bot shields
+// reject STALE Chrome versions — verified on thekitchn.com 2026-08-30, where
+// Chrome/124 returned 403 and Chrome/140 returned 200 from the same IP with
+// otherwise identical headers. When "site blocks us" reports cluster on big
+// recipe publishers, check this first: it looks like an IP block and isn't.
 export const WEB_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 
 export function parseShortcode(url) {
   const m = String(url).match(/instagram\.com\/(?:reels?|p|tv)\/([A-Za-z0-9_-]+)/i)

@@ -28,7 +28,11 @@ function HowTo({ source, children }: { source: string; children: React.ReactNode
   )
 }
 
-const PLAN_LIMITS: Record<string, number> = { free: 20, pro: 200 }
+// MIRRORS plan_limits() in Postgres. This is the FOURTH place these numbers
+// live (with plan_limits, PLANS in usage.mjs, and the landing page) and it is
+// the one the 20->10 flip missed, so Settings kept showing 20 for a day.
+// See docs/v2-tier-flip-checklist.md — update all of them together.
+const PLAN_LIMITS: Record<string, number> = { free: 10, pro: 200 }
 
 export default function Settings() {
   const navigate = useNavigate()

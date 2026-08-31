@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { PurchasesPackage } from '@revenuecat/purchases-capacitor'
 import { useAuth } from '../lib/auth'
 import {
@@ -41,6 +41,10 @@ function trialText(offering: ProOffering | null): string | null {
 
 export default function Upgrade() {
   const navigate = useNavigate()
+  // Why the user is standing here. Arriving with no explanation makes the
+  // paywall read as "that feature is Pro-only" when the truth is "you've used
+  // this month's imports" — the first loses trust, the second is just a limit.
+  const arrivalReason = (useLocation().state as { reason?: string } | null)?.reason ?? null
   const { session, isAnonymous } = useAuth()
   const [offering, setOffering] = useState<ProOffering | null>(null)
   const [loading, setLoading] = useState(true)
@@ -121,6 +125,12 @@ export default function Upgrade() {
         <h1 className="font-display text-3xl font-semibold tracking-tight">Dilla Pro</h1>
         <p className="mt-1.5 text-sm text-stone-500">For the cook whose saved folder never stops growing.</p>
       </div>
+
+      {arrivalReason && (
+        <p className="mb-4 rounded-2xl bg-paprika-50 px-4 py-3 text-sm text-paprika-800 dark:bg-paprika-950/40 dark:text-paprika-200">
+          {arrivalReason}
+        </p>
+      )}
 
       <ul className="mt-6 space-y-2.5 rounded-2xl bg-paper p-5 shadow-card">
         {PERKS.map((p) => (
