@@ -107,6 +107,28 @@ label. Label update must land before/with the release that ships the events.
 - Watch free-tier farming: reinstall = new anonymous user = fresh quota. Bounded
   by the per-user cost ceiling, so it is a slow leak rather than a hole.
 
+## ✅ Blocked publishers (fixed 2026-08-31)
+
+Major recipe sites refuse Netlify's datacenter IPs: measured allrecipes 402,
+Serious Eats 402, Simply Recipes 402, Food Network 403, The Kitchn 403 — with a
+current Chrome UA, so it is the IP, not the headers. This hit every web path:
+Add-by-URL, a shared blog link, link-in-bio, and Pinterest pins resolved to their
+destination.
+
+Apify's proxy cannot be used from outside their platform on our plan ("Proxy
+external access isn't enabled for your account"), but an ACTOR runs inside it.
+So a blocked page becomes a queued `web` job and the worker fetches it through
+`apify~website-content-crawler`. Verified end to end on the reported URL: The
+Kitchn's oven-baked ribs imported with 17 ingredients and 5 steps.
+
+- Cheap pool first, RESIDENTIAL only on retry.
+- Charged at the `web` rate; a page even Apify can't read refunds the import.
+- Queueing failures fall back to the old screenshot message, so this can never
+  be worse than what it replaced.
+- **Caveat for future measurement:** the first survey mixed real blocks (402/403)
+  with 404s from URLs that were simply made up. Only trust 401/402/403/406/429/451
+  as evidence of blocking.
+
 ## 🔄 Continuous — server-side, ships anytime (no app release, no review)
 
 - **2–4 weeks post-launch: pull the `recipe_usage` distribution** (% hitting caps, medians;
