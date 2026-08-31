@@ -39,8 +39,19 @@ export default function AddRecipe() {
       // The site refuses our servers' IP. The worker reaches it through Apify,
       // so this is a delay rather than a failure - same queue, different kind.
       if (result.reason === 'blocked_queue') {
-        await createJob(link, 'web', {})
-        navigate('/', { state: { queued: 'web' } })
+        try {
+          await createJob(link, 'web', {})
+          navigate('/', { state: { queued: 'web' } })
+        } catch (queueErr) {
+          // Queueing is the improvement, not the promise. If it fails, say the
+          // true thing we said before it existed rather than a raw DB error.
+          noteFrustration()
+          setError(
+            queueErr instanceof Error && /limit/i.test(queueErr.message)
+              ? queueErr.message
+              : 'That site blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.',
+          )
+        }
         return
       }
 

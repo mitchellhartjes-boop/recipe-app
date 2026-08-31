@@ -575,19 +575,31 @@ export default async (req) => {
         // Not a dead end any more: the worker can reach these through Apify,
         // which runs inside their platform and so can use their proxy. Queue it
         // rather than sending the user off to take a screenshot.
+        // If queueing fails for ANY reason - an unknown kind, the metering
+        // trigger, anything - fall back to exactly what we said before this
+        // path existed. A new capability must never make the failure worse
+        // than the failure it replaced.
         const { data, error } = await insertJob(supabase, userId, {
           url: link,
           kind: 'web',
           meta: { charged_kind: chargedKind },
         })
-        if (error) throw error
-        keepCharge = true
+        if (!error && data) {
+          keepCharge = true
+          return json({
+            ok: true,
+            status: 'queued',
+            kind: 'web',
+            job_id: data.id,
+            message: `${host || 'That site'} is slow to open up — fetching it another way. It'll appear in a minute or two.`,
+          })
+        }
+        console.warn(`[submit] could not queue web job for ${host}: ${error?.message}`)
         return json({
-          ok: true,
-          status: 'queued',
+          ok: false,
+          status: 'blocked',
           kind: 'web',
-          job_id: data.id,
-          message: `${host || 'That site'} is slow to open up — fetching it another way. It'll appear in a minute or two.`,
+          message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
         })
       }
       throw e
