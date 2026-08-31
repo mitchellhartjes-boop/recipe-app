@@ -153,6 +153,8 @@ export function limitMessage(result) {
       : `You've used all ${result.kind_limit} video recipes this month. Every other kind of recipe still works.`
   }
   return plan === 'free'
-    ? `You've saved all ${result?.limit ?? PLANS.free.imports} recipes in your free month. Upgrade to Pro for ${PLANS.pro.imports} a month.`
+    // "Upgrade to Pro for 200 a month" read as a PRICE. Never put a bare number
+    // after "for" in paywall copy — say what the number counts.
+    ? `You've saved all ${result?.limit ?? PLANS.free.imports} recipes in your free month. Pro raises the limit to ${PLANS.pro.imports} a month.`
     : `You've hit this month's limit of ${result?.limit ?? PLANS.pro.imports} recipes. It resets at the start of next month.`
 }
