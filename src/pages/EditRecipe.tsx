@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import type { Recipe } from '../lib/types'
 import RecipeForm from '../components/RecipeForm'
 import { valuesFrom, type CleanedRecipe } from '../lib/recipeForm'
+import { derivedCategories } from '../lib/categories'
 
 // Edit a saved recipe in place. Free for everyone, deliberately: a user's own
 // recipe is their data, and gating corrections behind Pro reads as hostile.
@@ -52,7 +53,7 @@ export default function EditRecipe() {
       heading="Edit recipe"
       subtitle={<p className="mt-1 text-sm text-stone-500">Changes save to your library only — the original post is untouched.</p>}
       imageUrl={recipe.image_url}
-      initial={valuesFrom(recipe)}
+      initial={valuesFrom(recipe, derivedCategories(recipe))}
       submitLabel="Save changes"
       submittingLabel="Saving…"
       onSubmit={handleSave}

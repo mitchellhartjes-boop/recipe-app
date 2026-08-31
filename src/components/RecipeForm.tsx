@@ -5,6 +5,7 @@ import {
   type FormIngredient,
   type RecipeFormValues,
 } from '../lib/recipeForm'
+import { CATEGORIES } from '../lib/categories'
 
 // The one recipe-editing surface, shared by all three ways a recipe gets
 // written: reviewing a fresh extraction, editing a saved recipe, and typing one
@@ -93,6 +94,38 @@ export default function RecipeForm({
 
         <IngredientList items={v.ingredients} setItems={(next) => set('ingredients', next)} />
         <StepList items={v.steps} setItems={(next) => set('steps', next)} />
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-stone-500">Categories</label>
+          <p className="mb-2 text-xs text-stone-400">
+            Where this shows up on your home screen. Tap to add or remove.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((c) => {
+              const on = v.categories.includes(c.slug)
+              return (
+                <button
+                  key={c.slug}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    set(
+                      'categories',
+                      on ? v.categories.filter((x) => x !== c.slug) : [...v.categories, c.slug],
+                    )
+                  }
+                  className={`rounded-full border px-3 py-1.5 text-sm transition active:scale-[0.97] ${
+                    on
+                      ? 'border-paprika-600 bg-paprika-600 text-white shadow-sm'
+                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 dark:bg-stone-100'
+                  }`}
+                >
+                  <span aria-hidden="true">{c.emoji}</span> {c.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
         <div>
           <label className="mb-1 block text-xs font-medium text-stone-500">Tags (comma-separated)</label>

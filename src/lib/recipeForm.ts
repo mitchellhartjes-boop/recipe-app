@@ -15,6 +15,7 @@ export type RecipeFormValues = {
   ingredients: FormIngredient[]
   steps: string[]
   tags: string
+  categories: string[]
   notes: string
 }
 
@@ -27,6 +28,7 @@ export type CleanedRecipe = {
   ingredients: FormIngredient[]
   steps: string[]
   tags: string[]
+  categories: string[]
   notes: string | null
 }
 
@@ -54,6 +56,9 @@ export function cleanValues(v: RecipeFormValues): CleanedRecipe {
       .split(',')
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean),
+    // Always written, never left null once the user has been through the form:
+    // saving IS the moment they take ownership of the categorisation.
+    categories: v.categories,
     notes: v.notes.trim() || null,
   }
 }
@@ -67,6 +72,7 @@ export const emptyValues = (): RecipeFormValues => ({
   ingredients: [{ raw: '' }],
   steps: [''],
   tags: '',
+  categories: [],
   notes: '',
 })
 
@@ -80,8 +86,9 @@ export function valuesFrom(r: {
   ingredients?: Ingredient[] | null
   steps?: string[] | null
   tags?: string[] | null
+  categories?: string[] | null
   notes?: string | null
-}): RecipeFormValues {
+}, derived?: string[]): RecipeFormValues {
   const ings = (r.ingredients ?? []).map((i) => ({ raw: i.raw, section: i.section ?? null }))
   return {
     title: r.title ?? '',
@@ -92,6 +99,10 @@ export function valuesFrom(r: {
     ingredients: ings.length ? ings : [{ raw: '' }],
     steps: r.steps?.length ? r.steps : [''],
     tags: (r.tags ?? []).join(', '),
+    // Prefill with what the recipe already shows under. If the user never set
+    // categories, that is the keyword matcher's answer — so opening a recipe
+    // and saving it keeps the categories it already had instead of clearing them.
+    categories: r.categories ?? derived ?? [],
     notes: r.notes ?? '',
   }
 }

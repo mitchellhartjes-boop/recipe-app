@@ -24,6 +24,10 @@ export type Recipe = {
   ingredients: Ingredient[]
   steps: string[]
   tags: string[]
+  /** Categories the USER chose. null = never set, so the keyword matcher
+   *  decides (which is how every recipe behaved before this column existed).
+   *  Non-null wins outright, including [] meaning "none, and I meant it". */
+  categories: string[] | null
   notes: string | null
   rating: number | null
   /** How many times this has actually been cooked — drives the "Most made"

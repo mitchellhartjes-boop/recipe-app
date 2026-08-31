@@ -185,7 +185,27 @@ function hit(text: string, matchers: (RegExp | string)[]): boolean {
   return false
 }
 
+/** What the keyword matcher WOULD say, ignoring any user choice. Used to
+ *  prefill the picker so opening a recipe and saving it never silently drops
+ *  the categories it already appeared under. */
+export function derivedCategories(recipe: Recipe): string[] {
+  return CATEGORIES.filter((c) => matchesKeywords(recipe, c)).map((c) => c.slug)
+}
+
+/** The categories a recipe actually belongs to: the user's choice if they made
+ *  one, otherwise the keyword matcher. */
+export function categoriesOf(recipe: Recipe): string[] {
+  return recipe.categories ?? derivedCategories(recipe)
+}
+
 export function recipeInCategory(recipe: Recipe, category: Category): boolean {
+  // A user who set categories has overruled the keywords — in both directions:
+  // one they added that keywords miss, and one they removed that keywords hit.
+  if (recipe.categories) return recipe.categories.includes(category.slug)
+  return matchesKeywords(recipe, category)
+}
+
+function matchesKeywords(recipe: Recipe, category: Category): boolean {
   const matchers = matchersFor(category)
   if (!matchers.length) return false
   const base = `${recipe.title ?? ''} ${(recipe.tags ?? []).join(' ')}`.toLowerCase()
