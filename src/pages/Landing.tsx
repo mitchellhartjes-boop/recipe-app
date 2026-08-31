@@ -166,8 +166,8 @@ export default function Landing() {
             <h3 className="font-display text-xl font-semibold">Free</h3>
             <p className="mt-1 text-3xl font-semibold">$0</p>
             <ul className="mt-4 space-y-2 text-sm text-stone-600">
-              <li>20 recipe imports a month</li>
-              <li>Including 5 video extractions</li>
+              <li>10 recipe imports a month</li>
+              <li>Including 3 video extractions</li>
               <li>Cook Mode, grocery list, meal planning — all of it</li>
             </ul>
           </div>

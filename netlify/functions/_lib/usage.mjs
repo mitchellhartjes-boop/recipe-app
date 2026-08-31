@@ -16,7 +16,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 export const PLANS = {
-  free: { imports: 20, video: 5, label: 'Free' },
+  free: { imports: 10, video: 3, label: 'Free' },
   pro: { imports: 200, video: 40, label: 'Pro' },
 }
 
