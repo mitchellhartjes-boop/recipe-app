@@ -1,8 +1,9 @@
 # Dilla — roadmap & backlog
 
 See `CLAUDE.md` for architecture/runbook and `docs/app-store-submission.md` for the store package.
-**Status: v1.0 released (App ID 6793520987). v2 (1.1) SUBMITTED 2026-08-30 — awaiting review.**
-**On approval, run the tier-flip batch (docs/v2-tier-flip-checklist.md) and turn `DISCOVER_SEARCH_NATIVE` back on.**
+**Status: v2 (1.1) APPROVED and LIVE 2026-08-30.** Tier flip to 10/3 applied across all four
+surfaces (plan_limits, PLANS, landing, press kit) and verified; `DISCOVER_SEARCH_NATIVE` back on;
+privacy policy upgraded to the affirmative no-signup claim.
 
 ## ✅ Done at approval
 
@@ -33,7 +34,8 @@ Everything here is app-binary work (one Codemagic build + review cycle).
 7. ✅ **In-app review prompt** (spec: docs/marketing-specs/review-prompt.md) — native
    SKStoreReviewController at the 2nd Cook Mode completion (fallback: 10th import), with the
    spec's guards. Local flags only; no sentiment-gating.
-8. ⬜ **Free-tier flip to 10/mo incl 3 video** — DECIDED (owner, see Tier strategy). Ships as ONE
+8. ✅ **Free-tier flip to 10/mo incl 3 video** — DONE 2026-08-30, verified end to end.
+   Rollback: `supabase/migrations/20260830_free_tier_10_3_ROLLBACK.sql`. Original note follows. — DECIDED (owner, see Tier strategy). Ships as ONE
    batch at v2 APPROVAL, not submission (a version's description only goes live
    when it is released; flipping earlier caps live v1.0 users at 10 while the
    store still advertises 20): `plan_limits()` + `_lib/usage.mjs` PLANS + App Store description +
