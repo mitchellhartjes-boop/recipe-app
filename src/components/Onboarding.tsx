@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon, ClockIcon, SearchIcon, CompassIcon } from './icons'
+import { BookIcon, CartIcon, FlameIcon, PlusIcon, CheckIcon, ClockIcon, SearchIcon, CompassIcon, SendIcon, CommentIcon, HeartIcon } from './icons'
 import { markOnboarded } from '../lib/onboarding'
 import Portal from './Portal'
 import { useAuth } from '../lib/auth'
@@ -112,28 +112,57 @@ function DiscoverArt() {
 }
 
 /** A post card → share → Dilla, with the notification that closes the loop. */
-function ShareFlowArt() {
+
+/** The pointer that turns an illustration into an instruction. Deliberately in
+ *  our own paprika rather than anyone else's pink, and positioned by the caller
+ *  so it can hang off whatever it is pointing at. */
+function TapHere({ className = '', point = 'down' }: { className?: string; point?: 'up' | 'down' }) {
+  const pill = (
+    <span className="whitespace-nowrap rounded-full bg-paprika-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-card">
+      Tap here
+    </span>
+  )
+  const arrowDown = <span className="-mt-px h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-paprika-600" />
+  const arrowUp = <span className="-mb-px h-0 w-0 border-x-[5px] border-b-[6px] border-x-transparent border-b-paprika-600" />
   return (
-    <div className="mb-6 select-none" aria-hidden="true">
-      <div className="flex items-center justify-center gap-3">
-        {/* the post being shared */}
-        <div className="w-24 shrink-0 rounded-2xl bg-paper p-2 shadow-card">
-          <div className="flex h-20 items-center justify-center rounded-xl bg-paprika-50 text-3xl">🍝</div>
-          <div className="mt-2 h-1.5 w-3/4 rounded-full bg-stone-200" />
-          <div className="mt-1 h-1.5 w-1/2 rounded-full bg-stone-200" />
+    <span className={`pointer-events-none absolute z-10 flex w-max flex-col items-center ${className}`}>
+      {point === 'up' ? arrowUp : null}
+      {pill}
+      {point === 'down' ? arrowDown : null}
+    </span>
+  )
+}
+
+/** A stylised post with its action rail, the share button ringed. DRAWN, never
+ *  a screenshot: a screenshot of someone else's app is theirs, ages out the
+ *  moment they redesign, and cannot adapt to dark mode. This only has to be
+ *  recognisable enough that the button is findable on the real thing. */
+function TapShareArt() {
+  return (
+    <div className="mb-6 flex select-none justify-center" aria-hidden="true">
+      <div className="relative w-[168px] rounded-[22px] border-4 border-stone-800 bg-stone-800 shadow-card">
+        {/* Flat stone-800, matching VideoArt. A stone gradient inverts in dark mode
+              and rendered light grey at the top - a "video" that is pale on top
+              reads as a broken image. Depth comes from a black overlay instead,
+              which behaves the same in both themes. */}
+          <div className="relative h-[210px] overflow-hidden rounded-[18px] bg-stone-800">
+            <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/0 via-black/10 to-black/40" />
+          <span className="absolute inset-0 flex items-center justify-center text-5xl">🍪</span>
+          {/* the creator strip, so it reads as a post rather than a video player */}
+          <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
+            <span className="h-5 w-5 rounded-full bg-white/25" />
+            <span className="h-1.5 w-12 rounded-full bg-white/25" />
+          </div>
+          {/* action rail - heart, comment, share. Only the share button matters. */}
+          <div className="absolute bottom-3 right-2 flex flex-col items-center gap-3 text-white/70">
+            <HeartIcon className="h-4 w-4" />
+            <CommentIcon className="h-4 w-4" />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white text-paprika-700 shadow-lg ring-[3px] ring-paprika-500">
+              <SendIcon className="h-4 w-4" />
+            </span>
+          </div>
+          <TapHere className="bottom-1 right-11 items-end" />
         </div>
-        {/* share arrow */}
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 shrink-0 text-paprika-600">
-          <path d="M4 12h14M13 6l6 6-6 6" />
-        </svg>
-        {/* Dilla */}
-        <img src="/favicon.svg" alt="" className="h-14 w-14 shrink-0 rounded-2xl shadow-card" />
-      </div>
-      {/* the notification that closes the loop */}
-      <div className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full bg-paper py-1.5 pl-2 pr-3.5 shadow-card">
-        <img src="/favicon.svg" alt="" className="h-5 w-5 rounded-md" />
-        <span className="text-[11px] font-medium text-ink">Recipe saved</span>
-        <CheckIcon className="h-3.5 w-3.5 text-paprika-700" />
       </div>
     </div>
   )
@@ -143,7 +172,7 @@ function ShareFlowArt() {
 function ShareSheetArt() {
   return (
     <div className="mb-6 flex justify-center select-none" aria-hidden="true">
-      <div className="w-full max-w-[270px] rounded-2xl bg-paper px-3 pb-3 pt-2 shadow-card">
+      <div className="w-full max-w-[270px] rounded-2xl bg-paper px-3 pb-10 pt-2 shadow-card">
         <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-stone-200" />
         <div className="flex items-start justify-between">
           {['a', 'b', 'c'].map((k) => (
@@ -154,9 +183,10 @@ function ShareSheetArt() {
               <span className="text-[9px] text-stone-400">App</span>
             </div>
           ))}
-          <div className="flex w-11 flex-col items-center gap-1">
+          <div className="relative flex w-11 flex-col items-center gap-1">
             <img src="/favicon.svg" alt="" className="h-10 w-10 rounded-xl shadow-sm ring-2 ring-paprika-600" />
             <span className="text-[9px] font-semibold text-paprika-700">Dilla</span>
+            <TapHere className="-bottom-7 left-1/2 -translate-x-1/2" point="up" />
           </div>
           <div className="flex w-11 flex-col items-center gap-1">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-400">
@@ -193,7 +223,7 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <PlusIcon className="h-8 w-8" />,
-    art: <ShareFlowArt />,
+    art: <TapShareArt />,
     title: 'Send a recipe from anywhere',
     body: (
       <>
@@ -234,8 +264,9 @@ const SLIDES: Slide[] = [
         video — Dilla watches and listens to it and writes the recipe out for you.
         <br />
         <br />
-        The only ones it can’t reach are private or age-restricted posts. For those, <b>screenshot
-        the recipe</b> and share the image instead — that works for anything you can see.
+        The only ones it can’t reach are private posts and ones the creator has limited to certain
+        audiences — nobody else can see those either. For those, <b>screenshot the recipe</b> and
+        share the image instead; that works for anything you can see.
       </>
     ),
   },

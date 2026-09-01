@@ -178,3 +178,25 @@ export function FlameIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+/** Paper plane — the share glyph every social app uses on a post. Drawn, not
+ *  borrowed: the onboarding needs to point at "that button" without shipping a
+ *  screenshot of someone else's UI. */
+export function SendIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21.5 2.5 11 13" />
+      <path d="M21.5 2.5 15 21.5l-4-8.5-8.5-4z" />
+    </svg>
+  )
+}
+
+/** Speech bubble — the comment glyph, used only to make a mock post's action
+ *  rail read as a real one so the share button is recognisable in place. */
+export function CommentIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-4-.9L3 21l1.9-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z" />
+    </svg>
+  )
+}
