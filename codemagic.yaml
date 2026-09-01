@@ -142,7 +142,12 @@ workflows:
           # also keeps the Share Extension in lockstep — a mismatch there is its
           # own upload failure. Override by setting MARKETING_VERSION in the
           # Codemagic env group when starting a new version train.
-          agvtool new-marketing-version "${MARKETING_VERSION:-1.1}"
+          #
+          # BUMP THIS DEFAULT EVERY RELEASE. It is not derived from anything, so
+          # a forgotten bump rebuilds the version already on the store and the
+          # upload fails at the very end with 90062 - after the whole build has
+          # run. 1.0 -> 1.1 cost a cycle exactly this way; 1.2 set 2026-08-31.
+          agvtool new-marketing-version "${MARKETING_VERSION:-1.2}"
           echo "Marketing version: $(agvtool what-marketing-version -terse1)  build: $BUILD_NUMBER"
       - name: Build IPA
         script: |
