@@ -13,6 +13,7 @@ import { recoverFromWeb, fetchPageOgImage, extractRecipeFromText } from '../netl
 import { rehostImage } from '../netlify/functions/_lib/images.mjs'
 import { fetchReelViaApify, fetchPageViaApify } from '../netlify/functions/_lib/apify.mjs'
 import { refundImport } from '../netlify/functions/_lib/usage.mjs'
+import { friendlyError } from '../netlify/functions/_lib/friendlyError.mjs'
 import { isTikTokUrl } from '../netlify/functions/_lib/tiktok.mjs'
 import { extractVideoViaApify } from './lib/video.mjs'
 import { sendPush, apnsConfigured } from './lib/apns.mjs'
@@ -364,8 +365,14 @@ async function main() {
       try {
         await processJob(supabase, job)
       } catch (e) {
+        // Raw reason to the log, human reason to the row. recipe_jobs.error is
+        // rendered verbatim on the failed-job card in the library, so it is a
+        // USER-FACING column and must never carry a vendor's billing message.
         console.error(`[job ${job.id}] FAILED:`, e.message)
-        await supabase.from('recipe_jobs').update({ status: 'failed', error: String(e.message).slice(0, 500) }).eq('id', job.id)
+        await supabase
+          .from('recipe_jobs')
+          .update({ status: 'failed', error: friendlyError(e.message).slice(0, 500) })
+          .eq('id', job.id)
         // Give the import slot back. The job failing means the user got NOTHING
         // for it, and an audience-restricted reel is the common case — charging
         // a video import for that burns 1 of only 3 a free user gets per month.
@@ -382,7 +389,7 @@ async function main() {
         // Tell the user it failed — they shared it and are waiting. Best-effort:
         // a push problem must not mask the original job failure.
         try {
-          await notifyJob(supabase, job, { ok: false, message: e.message })
+          await notifyJob(supabase, job, { ok: false, message: friendlyError(e.message) })
         } catch (pushErr) {
           console.warn(`[job ${job.id}] failure-notify error: ${pushErr.message}`)
         }

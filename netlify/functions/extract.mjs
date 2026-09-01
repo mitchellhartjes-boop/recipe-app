@@ -7,6 +7,7 @@ import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { rehostImage, appClient } from './_lib/images.mjs'
 import { adminClient as usageAdmin, userFromJwt, reserveImport, refundImport, limitMessage } from './_lib/usage.mjs'
+import { friendlyError } from './_lib/friendlyError.mjs'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -250,7 +251,10 @@ export default async (req) => {
         }),
       })
     }
-    return json({ error: e?.message || 'Extraction failed' }, 502)
+    // Log the real reason, show the user a human one. A billing or vendor
+    // failure is ours to fix and theirs to be unbothered by.
+    console.error('[extract] failed:', e?.message)
+    return json({ error: friendlyError(e?.message, 'Extraction failed') }, 502)
   } finally {
     // No draft came back (or it threw) — hand the slot back rather than charging
     // for a failed import. Note the user is charged at EXTRACT time, not at save:
