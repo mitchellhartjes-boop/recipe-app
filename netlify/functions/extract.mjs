@@ -220,11 +220,35 @@ export default async (req) => {
     // nicely for a while; this path was still handing the user
     // "Web page fetch failed (HTTP 403)", which reads as the app being broken.
     if (e?.blocked) {
-      // The publisher refuses our datacenter IP. The worker can still get it
-      // via Apify, so hand it to the queue rather than telling the user to go
-      // take a screenshot. 'blocked_queue' (not 'video_only') so the client
-      // queues the right KIND of job and can say something accurate.
-      return json({ ok: false, reason: 'blocked_queue', message: 'Fetching that one another way — it’ll appear in a minute or two.' })
+      // The publisher refuses our datacenter IP. A client that understands
+      // 'blocked_queue' queues a web job and shows its own "fetching it another
+      // way" banner, ignoring `message` below.
+      //
+      // BUT the shipped iOS binary has never heard of this reason. It falls
+      // through to its default branch, which navigates to the review screen
+      // using `draft` — and with no draft that screen bounces straight back,
+      // which is exactly the silent failure this replaced. So:
+      //   - `draft` is REQUIRED, or old clients fail invisibly.
+      //   - `message` must be the SCREENSHOT text, not a promise to fetch,
+      //     because an old client will show it and will NOT queue anything.
+      //     Promising a recipe that never arrives is worse than saying no.
+      // A server response has to stay true for the app that is already on
+      // people's phones, not just the one on the web.
+      let host = ''
+      try { host = new URL(url).hostname.replace(/^www\./, '') } catch { /* keep it generic */ }
+      return json({
+        ok: false,
+        reason: 'blocked_queue',
+        message: `${host || 'That site'} blocks apps from reading its pages. Screenshot the recipe and share the image instead — that works every time.`,
+        draft: toDraft({
+          recipe: {},
+          sourceUrl: url,
+          sourcePlatform: 'web',
+          sourceKind: 'manual',
+          model: null,
+          imageUrl: null,
+        }),
+      })
     }
     return json({ error: e?.message || 'Extraction failed' }, 502)
   } finally {
