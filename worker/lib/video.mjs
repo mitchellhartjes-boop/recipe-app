@@ -10,7 +10,7 @@ import { isTikTokUrl, vttToText } from '../../netlify/functions/_lib/tiktok.mjs'
 
 const execFileP = promisify(execFile)
 
-const SYSTEM = `You extract a cooking recipe from a short cooking video. You are given: the post caption, a transcript of the spoken narration (if any), and frames sampled across the video (which may show on-screen text or the cooking process). Prioritize explicit info from the transcript and any on-screen text; use the frames to fill gaps and confirm steps. Combine everything into ONE coherent recipe.
+const SYSTEM = `You extract a cooking recipe from a short cooking video. You are given: the post caption, a transcript of the spoken narration (if any), and frames sampled across the video (which may show on-screen text or the cooking process). When the caption contains a written ingredient list or method, treat it as the PRIMARY source and copy its quantities exactly — creators write "2 cups flour" in the caption but say "add some flour" out loud, so the caption is where exact amounts live. Use the transcript and on-screen text for steps, technique and anything the caption omits, and the frames to fill gaps and confirm steps. Combine everything into ONE coherent recipe.
 
 Respond with ONLY a JSON object (no prose, no markdown fences):
 {
@@ -89,7 +89,16 @@ async function processVideoFile({ videoPath, caption, apiKey, groqKey, ffmpeg, w
     images.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data.toString('base64') } })
   }
 
-  const parts = [`Post caption:\n${(caption || '').trim().slice(0, 600)}`]
+  // The caption is the most VALUABLE input here: it is where the creator writes
+  // exact quantities, and neither the transcript ("a good glug") nor the frames
+  // carry those reliably. It was capped at 600 chars while the transcript got
+  // 4000 - so on a real recipe caption the model saw the intro and maybe one
+  // ingredient, then nothing. It said so honestly ("cut off in the caption"),
+  // which read as a bad extraction but was us truncating the evidence.
+  //
+  // 3000 clears Instagram's own 2200-character caption limit outright. The extra
+  // tokens cost a fraction of a cent against a video import that costs ~8-12c.
+  const parts = [`Post caption:\n${(caption || '').trim().slice(0, 3000)}`]
   if (transcript) parts.push(`\nSpoken transcript:\n${transcript.slice(0, 4000)}`)
   parts.push(`\nBelow are ${images.length} frames sampled in order across the video:`)
 
