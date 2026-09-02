@@ -40,6 +40,35 @@ export async function rehostImage(supabase, srcUrl, keyHint = 'recipe') {
   }
 }
 
+// Upload raw bytes we were HANDED, rather than bytes we fetched. Used when the
+// user photographs a dish themselves: there is no source URL to re-host, just
+// an image the client already downscaled. Same bucket and same permanence
+// guarantee as rehostImage; returns null on any problem and never throws.
+export async function uploadImageBytes(supabase, { base64, mediaType = 'image/jpeg', keyHint = 'photo' }) {
+  if (!supabase || !base64) return null
+  try {
+    const buf = Buffer.from(base64, 'base64')
+    // A few hundred bytes is a broken upload, not a photo. The ceiling matters
+    // more: the client downscales before sending, so anything near MAX_BYTES
+    // means the client-side resize did not run.
+    if (buf.length < 500 || buf.length > MAX_BYTES) return null
+    const ct = String(mediaType).toLowerCase()
+    if (!ct.startsWith('image/')) return null
+    const ext = EXT[ct] || 'jpg'
+    const key = `${slug(keyHint)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}.${ext}`
+    const { error } = await supabase.storage.from(BUCKET).upload(key, buf, {
+      contentType: ct,
+      cacheControl: '31536000',
+      upsert: false,
+    })
+    if (error) return null
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(key)
+    return data?.publicUrl || null
+  } catch {
+    return null
+  }
+}
+
 // Find a representative stock photo from Pexels. Returns a direct image URL, or
 // null (no key, no match, any error). Never throws.
 //

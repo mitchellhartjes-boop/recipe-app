@@ -16,6 +16,9 @@ export type RecipeFormValues = {
   steps: string[]
   tags: string
   categories: string[]
+  /** Cover photo URL. Already uploaded by the time it lands here — the form
+   *  holds a URL, never bytes, so saving is the same cheap write it always was. */
+  imageUrl: string | null
   notes: string
 }
 
@@ -29,6 +32,7 @@ export type CleanedRecipe = {
   steps: string[]
   tags: string[]
   categories: string[]
+  image_url: string | null
   notes: string | null
 }
 
@@ -59,6 +63,7 @@ export function cleanValues(v: RecipeFormValues): CleanedRecipe {
     // Always written, never left null once the user has been through the form:
     // saving IS the moment they take ownership of the categorisation.
     categories: v.categories,
+    image_url: v.imageUrl,
     notes: v.notes.trim() || null,
   }
 }
@@ -73,6 +78,7 @@ export const emptyValues = (): RecipeFormValues => ({
   steps: [''],
   tags: '',
   categories: [],
+  imageUrl: null,
   notes: '',
 })
 
@@ -87,6 +93,7 @@ export function valuesFrom(r: {
   steps?: string[] | null
   tags?: string[] | null
   categories?: string[] | null
+  image_url?: string | null
   notes?: string | null
 }, derived?: string[]): RecipeFormValues {
   const ings = (r.ingredients ?? []).map((i) => ({ raw: i.raw, section: i.section ?? null }))
@@ -103,6 +110,7 @@ export function valuesFrom(r: {
     // categories, that is the keyword matcher's answer — so opening a recipe
     // and saving it keeps the categories it already had instead of clearing them.
     categories: r.categories ?? derived ?? [],
+    imageUrl: r.image_url ?? null,
     notes: r.notes ?? '',
   }
 }

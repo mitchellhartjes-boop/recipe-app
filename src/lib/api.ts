@@ -78,3 +78,25 @@ export async function createJob(
   }
   return data.id as string
 }
+
+/**
+ * Store a photo the user took and get back a permanent URL.
+ *
+ * The image is already downscaled by prepareImage() before it reaches here —
+ * a raw phone photo would be several MB, which base64 inflates by a third and
+ * a function body will refuse.
+ */
+export async function uploadPhoto(base64: string, mediaType: string, hint?: string): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API_BASE}/.netlify/functions/upload-photo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: JSON.stringify({ image: base64, mediaType, hint }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body?.url) throw new Error(body?.error || "That photo couldn't be saved.")
+  return body.url as string
+}

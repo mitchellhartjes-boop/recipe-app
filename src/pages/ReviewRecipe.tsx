@@ -38,7 +38,9 @@ export default function ReviewRecipe() {
         source_platform: initial!.source_platform,
         source_url: initial!.source_url,
         source_author: initial!.source_author,
-        image_url: initial!.image_url,
+        // The form can now set a cover. If the user picked one, it wins; the
+        // extracted cover is the fallback, not the override it used to be.
+        image_url: clean.image_url ?? initial!.image_url,
         status: 'saved',
         extraction_meta: initial!.extraction_meta ?? {},
       })

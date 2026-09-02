@@ -6,6 +6,7 @@ import {
   type RecipeFormValues,
 } from '../lib/recipeForm'
 import { CATEGORIES } from '../lib/categories'
+import PhotoPicker from './PhotoPicker'
 
 // The one recipe-editing surface, shared by all three ways a recipe gets
 // written: reviewing a fresh extraction, editing a saved recipe, and typing one
@@ -94,6 +95,8 @@ export default function RecipeForm({
 
         <IngredientList items={v.ingredients} setItems={(next) => set('ingredients', next)} />
         <StepList items={v.steps} setItems={(next) => set('steps', next)} />
+
+        <PhotoPicker value={v.imageUrl} onChange={(url) => set('imageUrl', url)} hint={v.title} />
 
         <div>
           <label className="mb-1 block text-xs font-medium text-stone-500">Categories</label>
