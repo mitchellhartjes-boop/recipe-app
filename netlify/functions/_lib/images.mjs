@@ -10,6 +10,23 @@ const WEB_UA =
 const EXT = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' }
 const MAX_BYTES = 8 * 1024 * 1024
 
+// Storage writes need the SERVICE ROLE. The recipe-images bucket's RLS refuses
+// the app account outright ("new row violates row-level security policy"),
+// which is why the worker could re-host covers and the functions silently
+// could not. rehostImage returns null on failure and its callers fall back to
+// the ORIGINAL url - so covers kept appearing and nobody noticed, right up
+// until an Instagram CDN link expired and the card went blank.
+//
+// Callers still pass their own client; this only overrides the storage write.
+function storageClient(passed) {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return passed
+  if (!_storage) _storage = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+  return _storage
+}
+let _storage = null
+
 function slug(s) {
   return String(s || 'recipe').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'recipe'
 }
@@ -27,13 +44,14 @@ export async function rehostImage(supabase, srcUrl, keyHint = 'recipe') {
     if (buf.length < 100 || buf.length > MAX_BYTES) return null
     const ext = EXT[ct] || 'jpg'
     const key = `${slug(keyHint)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}.${ext}`
-    const { error } = await supabase.storage.from(BUCKET).upload(key, buf, {
+    const store = storageClient(supabase)
+    const { error } = await store.storage.from(BUCKET).upload(key, buf, {
       contentType: ct || 'image/jpeg',
       cacheControl: '31536000',
       upsert: false,
     })
     if (error) return null
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(key)
+    const { data } = store.storage.from(BUCKET).getPublicUrl(key)
     return data?.publicUrl || null
   } catch {
     return null
@@ -61,13 +79,14 @@ export async function uploadImageBytes(supabase, { base64, mediaType = 'image/jp
     if (!ct.startsWith('image/')) return { error: `not an image type (${ct})` }
     const ext = EXT[ct] || 'jpg'
     const key = `${slug(keyHint)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}.${ext}`
-    const { error } = await supabase.storage.from(BUCKET).upload(key, buf, {
+    const store = storageClient(supabase)
+    const { error } = await store.storage.from(BUCKET).upload(key, buf, {
       contentType: ct,
       cacheControl: '31536000',
       upsert: false,
     })
     if (error) return { error: `storage upload: ${error.message}` }
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(key)
+    const { data } = store.storage.from(BUCKET).getPublicUrl(key)
     return data?.publicUrl ? { url: data.publicUrl } : { error: 'no public URL returned' }
   } catch (e) {
     return { error: `unexpected: ${e.message}` }
