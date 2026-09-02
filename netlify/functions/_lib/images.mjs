@@ -45,15 +45,20 @@ export async function rehostImage(supabase, srcUrl, keyHint = 'recipe') {
 // an image the client already downscaled. Same bucket and same permanence
 // guarantee as rehostImage; returns null on any problem and never throws.
 export async function uploadImageBytes(supabase, { base64, mediaType = 'image/jpeg', keyHint = 'photo' }) {
-  if (!supabase || !base64) return null
+  // Returns { url } or { error }. rehostImage swallows failures because a
+  // missing cover is cosmetic; here the user explicitly chose a photo and is
+  // waiting, so "it didn't work" with no reason is not good enough - for them
+  // or for whoever has to debug it.
+  if (!supabase) return { error: 'no storage client (APP_EMAIL/APP_PASSWORD sign-in failed?)' }
+  if (!base64) return { error: 'no image bytes' }
   try {
     const buf = Buffer.from(base64, 'base64')
     // A few hundred bytes is a broken upload, not a photo. The ceiling matters
     // more: the client downscales before sending, so anything near MAX_BYTES
     // means the client-side resize did not run.
-    if (buf.length < 500 || buf.length > MAX_BYTES) return null
+    if (buf.length < 500 || buf.length > MAX_BYTES) return { error: `size out of range (${buf.length} bytes)` }
     const ct = String(mediaType).toLowerCase()
-    if (!ct.startsWith('image/')) return null
+    if (!ct.startsWith('image/')) return { error: `not an image type (${ct})` }
     const ext = EXT[ct] || 'jpg'
     const key = `${slug(keyHint)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}.${ext}`
     const { error } = await supabase.storage.from(BUCKET).upload(key, buf, {
@@ -61,11 +66,11 @@ export async function uploadImageBytes(supabase, { base64, mediaType = 'image/jp
       cacheControl: '31536000',
       upsert: false,
     })
-    if (error) return null
+    if (error) return { error: `storage upload: ${error.message}` }
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(key)
-    return data?.publicUrl || null
-  } catch {
-    return null
+    return data?.publicUrl ? { url: data.publicUrl } : { error: 'no public URL returned' }
+  } catch (e) {
+    return { error: `unexpected: ${e.message}` }
   }
 }
 

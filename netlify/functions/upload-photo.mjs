@@ -11,7 +11,7 @@
 // Auth is REQUIRED. Without it this is an open file host on someone else's
 // bucket, which is a bill and an abuse channel, not a feature.
 import { uploadImageBytes, appClient } from './_lib/images.mjs'
-import { userFromJwt } from './_lib/usage.mjs'
+import { adminClient, userFromJwt } from './_lib/usage.mjs'
 import { friendlyError } from './_lib/friendlyError.mjs'
 
 const CORS = {
@@ -47,9 +47,19 @@ export default async (req) => {
     if (!base64) return json({ error: 'No image received.' }, 400)
     if (base64.length > MAX_BASE64) return json({ error: 'That photo is too large. Try taking it again.' }, 413)
 
-    const url = await uploadImageBytes(await appClient(), { base64, mediaType, keyHint: body?.hint || 'photo' })
-    if (!url) return json({ error: "That photo couldn't be saved. Try again." }, 502)
-    return json({ url })
+    // Service role for the storage write. The bucket's RLS refuses the app
+    // account ("new row violates row-level security policy"), which is why the
+    // worker - which holds the service key - can re-host covers while the
+    // functions cannot. Safe here because this endpoint already refuses anyone
+    // without a valid session, so the write is authorised before we get here.
+    const storage = adminClient() ?? (await appClient())
+    const result = await uploadImageBytes(storage, { base64, mediaType, keyHint: body?.hint || 'photo' })
+    if (result?.error) {
+      // The real reason to the log; a human sentence to the user.
+      console.error('[upload-photo] storage refused:', result.error)
+      return json({ error: "That photo couldn't be saved. Try again." }, 502)
+    }
+    return json({ url: result.url })
   } catch (e) {
     console.error('[upload-photo] failed:', e?.message)
     return json({ error: friendlyError(e?.message, "That photo couldn't be saved.") }, 502)
