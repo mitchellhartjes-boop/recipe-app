@@ -224,22 +224,40 @@ const VISION_MEDIA = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/web
 // screenshot path — the way to capture audience-restricted / age-gated reels
 // (e.g. cocktails) that no anonymous fetch can read. Returns the same shape as
 // the text extractors.
-export async function extractRecipeFromImage({ base64, mediaType, apiKey }) {
-  const type = VISION_MEDIA.has(mediaType) ? mediaType : 'image/jpeg'
+export async function extractRecipeFromImage({ base64, mediaType, images, apiKey }) {
+  // Accepts EITHER one image (base64 + mediaType, the original shape every
+  // existing caller uses) or several via `images`. Multiple matters because a
+  // long recipe does not fit in one photo: the ingredients are on one page and
+  // the method runs onto the next, and photographing only what fits produced a
+  // confidently half-finished recipe rather than an obvious failure.
+  const pages = (images?.length ? images : [{ base64, mediaType }])
+    .filter((p) => p?.base64)
+    .map((p) => ({ base64: p.base64, type: VISION_MEDIA.has(p.mediaType) ? p.mediaType : 'image/jpeg' }))
+  if (!pages.length) throw new Error('No image to read.')
+
   const client = new Anthropic({ apiKey })
+  const content = []
+  pages.forEach((p, i) => {
+    // Label each page. Unlabelled images invite the model to treat a second
+    // photo as a SECOND recipe; numbering them says these are one document.
+    if (pages.length > 1) content.push({ type: 'text', text: `Page ${i + 1} of ${pages.length}:` })
+    content.push({ type: 'image', source: { type: 'base64', media_type: p.type, data: p.base64 } })
+  })
+  content.push({
+    type: 'text',
+    text:
+      pages.length > 1
+        ? `These ${pages.length} images are pages of ONE recipe, in order. Combine them into a single recipe: ingredients may be on one page and the method on another, and a list may continue across a page break. Do not repeat an ingredient or step that appears on two pages. Respond with the specified JSON.`
+        : 'Extract the recipe from this image as the specified JSON.',
+  })
+
   const msg = await client.messages.create({
     model: VISION_MODEL,
-    max_tokens: 3000,
+    // More pages means a longer recipe to write out; a fixed 3000 truncated
+    // exactly the multi-page recipes this feature exists to capture.
+    max_tokens: pages.length > 1 ? 6000 : 3000,
     system: VISION_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: type, data: base64 } },
-          { type: 'text', text: 'Extract the recipe from this image as the specified JSON.' },
-        ],
-      },
-    ],
+    messages: [{ role: 'user', content }],
   })
   const raw = msg.content.find((b) => b.type === 'text')?.text ?? ''
   let recipe

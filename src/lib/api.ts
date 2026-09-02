@@ -100,3 +100,27 @@ export async function uploadPhoto(base64: string, mediaType: string, hint?: stri
   if (!res.ok || !body?.url) throw new Error(body?.error || "That photo couldn't be saved.")
   return body.url as string
 }
+
+/**
+ * Read a recipe from one or more photographed pages.
+ *
+ * Same endpoint and same response shape as extractRecipe, so the Add screen
+ * routes the result identically — it just arrives from a camera rather than a
+ * URL. Pages are already downscaled by prepareImage().
+ */
+export async function extractFromPhotos(
+  images: { base64: string; mediaType: string }[],
+): Promise<ExtractResult> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API_BASE}/.netlify/functions/extract`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: JSON.stringify({ images }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok && !body?.reason) throw new Error(body?.error || "Couldn't read those photos.")
+  return body as ExtractResult
+}

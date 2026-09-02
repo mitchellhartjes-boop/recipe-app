@@ -2,7 +2,7 @@
 // POST { url } -> { ok: true, source_kind, recipe } | { ok: false, reason, message, draft }
 // Slow paths (link-in-bio web_search, video) are handled async elsewhere — this returns a
 // reason so the client can route them.
-import { extractReel, extractWebPage, extractRecipeFromText, normalizeUrl } from './_lib/extract.mjs'
+import { extractReel, extractWebPage, extractRecipeFromText, extractRecipeFromImage, normalizeUrl } from './_lib/extract.mjs'
 import { recoverFromCreatorSite } from './_lib/creatorSite.mjs'
 import { isTikTokUrl, fetchTikTokPost } from './_lib/tiktok.mjs'
 import { rehostImage, appClient } from './_lib/images.mjs'
@@ -17,6 +17,11 @@ const CORS = {
   // the auth header makes WebKit fail every request with "Load failed".
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
+
+// A recipe spanning more than a few pages is a cookbook chapter, not a recipe.
+// The real ceiling is the request body: each page is downscaled to ~200-400KB
+// client-side and base64 adds a third on top.
+const MAX_PAGES = 5
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -59,13 +64,22 @@ export default async (req) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return json({ error: 'Server is missing ANTHROPIC_API_KEY' }, 500)
 
-  let url
+  let url, images
   try {
-    ;({ url } = await req.json())
+    ;({ url, images } = await req.json())
   } catch {
     return json({ error: 'Invalid JSON body' }, 400)
   }
-  if (!url || typeof url !== 'string') return json({ error: 'Missing "url" in body' }, 400)
+  // Photographing a recipe is the other way in. One or more pages of a cookbook,
+  // a recipe card, a magazine - things with no URL at all, which used to be
+  // reachable only by screenshotting into the share sheet from another app.
+  const pages = Array.isArray(images) ? images.filter((i) => i?.base64) : []
+  if (!pages.length && (!url || typeof url !== 'string')) {
+    return json({ error: 'Missing "url" or "images" in body' }, 400)
+  }
+  if (pages.length > MAX_PAGES) {
+    return json({ error: `That's more than ${MAX_PAGES} photos. Use fewer pages.` }, 400)
+  }
 
   // --- who is asking, and do they have budget left ---
   // This endpoint spends Anthropic credit on every call, so it is signed-in only
@@ -74,13 +88,38 @@ export default async (req) => {
   const userId = await userFromJwt(req)
   if (!userId) return json({ error: 'Please sign in to import recipes.' }, 401)
   const meterAdmin = usageAdmin()
-  const reservation = await reserveImport(meterAdmin, userId, 'web')
+  // Same work as sharing a screenshot in, so the same kind and the same price.
+  const chargedKind = pages.length ? 'screenshot' : 'web'
+  const reservation = await reserveImport(meterAdmin, userId, chargedKind)
   if (!reservation.allowed) {
     return json({ ok: false, reason: 'limit_reached', message: limitMessage(reservation) })
   }
   let keepCharge = false
 
   try {
+    if (pages.length) {
+      const { recipe: r, model } = await extractRecipeFromImage({ images: pages, apiKey })
+      if (!r.found) {
+        return json({
+          ok: false,
+          reason: 'no_recipe',
+          message:
+            pages.length > 1
+              ? "Couldn't read a recipe from those photos. Make sure the ingredients and steps are in shot and the text is sharp."
+              : "Couldn't read a recipe from that photo. Make sure the ingredients and steps are in shot — if it runs onto another page, add that photo too.",
+          draft: toDraft({ recipe: r, sourceUrl: null, sourcePlatform: 'manual', sourceKind: 'photo', model, imageUrl: null }),
+        })
+      }
+      keepCharge = true
+      return json({
+        ok: true,
+        source_kind: 'photo',
+        // No cover: a photo of a printed page is not a photo of the food. The
+        // form's photo picker is where a real one gets added.
+        recipe: toDraft({ recipe: r, sourceUrl: null, sourcePlatform: 'manual', sourceKind: 'photo', model, imageUrl: null }),
+      })
+    }
+
     if (isTikTokUrl(url)) {
       // Caption-first, exactly like Instagram — except TikTok's caption very
       // often IS the whole recipe, read for free from the documented oEmbed API.
@@ -259,6 +298,6 @@ export default async (req) => {
     // No draft came back (or it threw) — hand the slot back rather than charging
     // for a failed import. Note the user is charged at EXTRACT time, not at save:
     // the money is spent here, and abandoning the review screen still cost it.
-    if (reservation.metered && !keepCharge) await refundImport(meterAdmin, userId, 'web')
+    if (reservation.metered && !keepCharge) await refundImport(meterAdmin, userId, chargedKind)
   }
 }
