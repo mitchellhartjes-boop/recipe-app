@@ -8,3 +8,11 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Shared recipe links are person-to-person. They must never be indexed: a
+# search-visible page of someone else's recipe is a different product with a
+# different set of problems, and not one we intend to ship.
+[[headers]]
+  for = "/s/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

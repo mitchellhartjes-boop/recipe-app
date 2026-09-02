@@ -14,6 +14,7 @@ import GrocerySheet from '../components/GrocerySheet'
 import CookMode from '../components/CookMode'
 import RecipeCover from '../components/RecipeCover'
 import SourceCredit from '../components/SourceCredit'
+import ShareRecipe from '../components/ShareRecipe'
 import { StarIcon, ClockIcon, UsersIcon, MinusIcon, PlusIcon, CheckIcon, FlameIcon, CartIcon } from '../components/icons'
 
 export default function RecipeDetail() {
@@ -313,6 +314,7 @@ export default function RecipeDetail() {
         >
           Edit recipe
         </Link>
+        <ShareRecipe recipeId={recipe.id} title={recipe.title} />
         <button onClick={remove} className="text-sm font-medium text-stone-400 transition hover:text-red-600">
           Delete recipe
         </button>

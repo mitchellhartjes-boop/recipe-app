@@ -15,6 +15,7 @@ import RecipeDetail from './pages/RecipeDetail'
 import Settings from './pages/Settings'
 import ResetPassword from './pages/ResetPassword'
 import Upgrade from './pages/Upgrade'
+import SharedRecipe from './pages/SharedRecipe'
 import Discover from './pages/Discover'
 import Landing from './pages/Landing'
 import EditRecipe from './pages/EditRecipe'
@@ -66,6 +67,11 @@ export default function App() {
       <Routes>
         {showLanding && <Route path="/" element={<Landing />} />}
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
+        {/* PUBLIC on purpose, and deliberately outside <Protected>. The whole
+            point of a shared link is that it works for someone with no account
+            — putting it behind the auth gate would send every recipient to a
+            sign-in wall, which is the opposite of the feature. */}
+        <Route path="/s/:token" element={<SharedRecipe />} />
         <Route element={<Protected><Layout /></Protected>}>
           <Route path="/" element={<Library />} />
           <Route path="/c/:slug" element={<Category />} />
