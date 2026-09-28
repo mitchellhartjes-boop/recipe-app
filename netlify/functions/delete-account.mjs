@@ -22,15 +22,34 @@ const json = (body, status = 200) =>
 // Every table that holds per-user rows. Purged explicitly rather than trusting
 // FK cascades, which aren't declared uniformly across these tables — an account
 // deletion that silently leaves data behind is exactly what must not happen.
+//
+// recipe_usage and recipe_profiles were missing until 2026-09-28, so deletions
+// before then may have left usage counts and plan rows behind. recipe_shares
+// is listed ahead of its migration: a missing table is skipped, not an error.
 const USER_TABLES = [
   'device_tokens',
   'share_keys',
+  'recipe_shares',
   'recipe_jobs',
   'recipe_grocery_items',
   'recipe_meal_plan',
   'recipe_category_prefs',
+  'recipe_usage',
+  'recipe_profiles',
   'recipe_recipes',
 ]
+
+// Tables owned by OTHER apps sharing this database. Sounder is moving into
+// Dilla's project so the account can run on Supabase Free, and its tables
+// cascade-delete from auth.users. If Dilla removed the login of someone who
+// also uses Sounder, their catches would vanish with it. So Dilla deletes its
+// OWN data always, and the shared login only when no other app still needs it
+// - the same rule Sounder's delete_account() already follows from its side.
+const OTHER_APP_TABLES = ['fishing_spots', 'fishing_catches', 'fishing_photos', 'fishing_spot_photos']
+
+// PostgREST's code for "no such table". Before Sounder moves in, its tables
+// don't exist here, and that must read as "no other app" - not as a failure.
+const TABLE_MISSING = 'PGRST205'
 const IMAGE_BUCKET = process.env.RECIPE_IMAGE_BUCKET || 'recipe-images'
 
 export default async (req) => {
@@ -81,13 +100,40 @@ export default async (req) => {
     //    auth user, so a retry can finish the job rather than orphaning it.
     for (const table of USER_TABLES) {
       const { error } = await admin.from(table).delete().eq('user_id', userId)
+      if (error?.code === TABLE_MISSING) continue
       if (error) throw new Error(`Failed clearing ${table}: ${error.message}`)
     }
 
-    // 3. The auth user itself. Done LAST: if anything above failed we still have
-    //    a valid account to retry against, rather than a half-deleted ghost.
-    const { error: delErr } = await admin.auth.admin.deleteUser(userId)
-    if (delErr) throw new Error(`Failed removing the account: ${delErr.message}`)
+    // 3. Does another app in this database still use this login?
+    //    Fail SAFE: if we can't tell, keep the login. A kept login is a
+    //    recoverable nuisance; another app's data destroyed by cascade is not.
+    let sharedWithAnotherApp = false
+    for (const table of OTHER_APP_TABLES) {
+      const { count, error } = await admin
+        .from(table)
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+      if (error?.code === TABLE_MISSING) continue
+      if (error) {
+        console.error(`[delete-account] could not check ${table}; keeping the login:`, error.message)
+        sharedWithAnotherApp = true
+        break
+      }
+      if ((count ?? 0) > 0) {
+        sharedWithAnotherApp = true
+        break
+      }
+    }
+
+    // 4. The auth user itself, LAST: if anything above failed we still have a
+    //    valid account to retry against rather than a half-deleted ghost.
+    //    Every Dilla row is already gone either way - for someone who also uses
+    //    another app, deleting their Dilla account means deleting their Dilla
+    //    data, and the login stays for the app they're still using.
+    if (!sharedWithAnotherApp) {
+      const { error: delErr } = await admin.auth.admin.deleteUser(userId)
+      if (delErr) throw new Error(`Failed removing the account: ${delErr.message}`)
+    }
 
     return json({ ok: true })
   } catch (e) {
