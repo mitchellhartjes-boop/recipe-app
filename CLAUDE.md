@@ -35,7 +35,7 @@ goals, and how to run the frontend for iteration). Pure design work is frontend-
 
 **Share-to-app** — `netlify/functions/submit.mjs` is the **iOS Shortcut** endpoint: `POST { url }` gated by a `SHORTCUT_TOKEN` bearer header. It reuses the same extractors but **saves directly** (the phone share flow has no review screen): fast paths (caption/website) insert a `status:'saved'` recipe, slow paths (link-in-bio/video) enqueue a `recipe_jobs` row. It signs in as the app user (`APP_EMAIL`/`APP_PASSWORD`) so RLS + the `auth.uid()` column defaults scope the rows — same mechanism as the worker. Build/usage guide: `docs/ios-shortcut.md`.
 
-**Database / realtime** — Supabase project `jftsgeerivttpvqiqjnj` (shared with the owner's other "food/health tracker" app; our tables are `recipe_*`-prefixed). Tables:
+**Database / realtime** — Supabase project `kxwerunvpjqgaviucqqj` (Dilla's own since 2026-07-28). **Shared with Sounder since 2026-09-29** — its `fishing_*` tables and private `fishing-photos` bucket live here too, with ONE auth pool across both apps. So: account deletion must remove only Dilla's rows and keep the login if a Sounder table still references it (`delete-account.mjs` does this), and every Dilla table holding user data needs a real FK to `auth.users` or Sounder's `delete_account()` can't see it. Auth email templates are split by type — Magic Link and Confirm signup are Sounder's sign-in codes; Reset password and Change email are Dilla's — which holds only while Dilla's email confirmations stay OFF. The old project `jftsgeerivttpvqiqjnj` is retired; never point anything at it. Full map and ops: `C:\Users\MHARTJES\Projects\supabase-ops`. Tables:
 - `recipe_recipes` — the library. jsonb `ingredients`/`steps`, `text[]` tags, RLS scoped to `auth.uid()`, status `draft|saved`.
 - `recipe_jobs` — async queue. `kind` (`link_in_bio`|`video`), `status` (`queued|processing|done|failed`), `meta` jsonb, `recipe_id`. RLS per-user.
 - Realtime is enabled on both tables (the Library subscribes for live updates).
@@ -102,7 +102,7 @@ tools/                    (gitignored) yt-dlp.exe, ffmpeg.exe, gh/bin/gh.exe
 - **Netlify site env:** `ANTHROPIC_API_KEY`, the two `VITE_SUPABASE_*`, plus `SHORTCUT_TOKEN`, `APP_EMAIL`, `APP_PASSWORD` (the last three power the `submit` share-to-app endpoint).
 - `SHORTCUT_TOKEN` (gitignored `.env` + Netlify): the bearer secret the iOS Shortcut sends. The public repo must never contain its value — `docs/ios-shortcut.md` uses a placeholder.
 - **GitHub Actions secrets:** the six above **plus `APIFY_TOKEN`** (needed for the cloud video path). Set via the GitHub UI (Settings → Secrets and variables → Actions) or `gh secret set`.
-- **Supabase:** project `jftsgeerivttpvqiqjnj`, URL `https://jftsgeerivttpvqiqjnj.supabase.co`. (MCP connected in past sessions.)
+- **Supabase:** project `kxwerunvpjqgaviucqqj`, URL `https://kxwerunvpjqgaviucqqj.supabase.co` — shared with Sounder (see Database above). Custom SMTP is OFF, so auth emails (password resets, Sounder codes) reach only Supabase team members until Resend is set up.
 - ⚠️ **Rotate-me:** the Anthropic key, Groq key, app password, and the GitHub PAT all passed through chat during setup — rotate them when convenient.
 
 ---
